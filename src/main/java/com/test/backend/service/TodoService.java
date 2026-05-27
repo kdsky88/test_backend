@@ -23,6 +23,7 @@ public class TodoService {
 
     private final TodoRepository todoRepository;
     private final UserRepository userRepository;
+    private final RiskCalculator riskCalculator;
 
     @Transactional
     public TodoResponse createTodo(String email, CreateTodoRequest request) {
@@ -33,7 +34,7 @@ public class TodoService {
         if (request.getPriority() != null) todo.setPriority(request.getPriority());
         todo.setDueDate(request.getDueDate());
         todo.setOwner(owner);
-        return new TodoResponse(todoRepository.save(todo));
+        return new TodoResponse(todoRepository.save(todo), riskCalculator);
     }
 
     @Transactional(readOnly = true)
@@ -42,13 +43,13 @@ public class TodoService {
         Page<Todo> todos = (status != null)
                 ? todoRepository.findByOwnerAndStatus(owner, status, pageable)
                 : todoRepository.findByOwner(owner, pageable);
-        return todos.map(TodoResponse::new);
+        return todos.map(todo -> new TodoResponse(todo, riskCalculator));
     }
 
     @Transactional(readOnly = true)
     public TodoResponse getTodo(String email, Long id) {
         Todo todo = findTodoAndCheckOwner(email, id);
-        return new TodoResponse(todo);
+        return new TodoResponse(todo, riskCalculator);
     }
 
     @Transactional
@@ -58,14 +59,14 @@ public class TodoService {
         if (request.getDescription() != null) todo.setDescription(request.getDescription());
         if (request.getPriority() != null) todo.setPriority(request.getPriority());
         if (request.getDueDate() != null) todo.setDueDate(request.getDueDate());
-        return new TodoResponse(todo);
+        return new TodoResponse(todo, riskCalculator);
     }
 
     @Transactional
     public TodoResponse changeStatus(String email, Long id, UpdateTodoStatusRequest request) {
         Todo todo = findTodoAndCheckOwner(email, id);
         todo.setStatus(request.getStatus());
-        return new TodoResponse(todo);
+        return new TodoResponse(todo, riskCalculator);
     }
 
     @Transactional
