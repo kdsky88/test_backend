@@ -7,6 +7,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -37,6 +38,23 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
         String message = errors.values().stream().findFirst().orElse("Validation failed");
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Bad Request",
+                message,
+                LocalDateTime.now()
+        );
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatchException(
+            MethodArgumentTypeMismatchException ex) {
+        String message = String.format("'%s'은(는) 올바르지 않은 값입니다. 허용 값: %s",
+                ex.getValue(),
+                ex.getRequiredType() != null && ex.getRequiredType().isEnum()
+                        ? java.util.Arrays.toString(ex.getRequiredType().getEnumConstants())
+                        : "알 수 없음");
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
                 "Bad Request",
