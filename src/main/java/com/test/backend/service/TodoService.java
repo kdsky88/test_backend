@@ -57,7 +57,11 @@ public class TodoService {
         if (request.getTitle() != null) todo.setTitle(request.getTitle());
         if (request.getDescription() != null) todo.setDescription(request.getDescription());
         if (request.getPriority() != null) todo.setPriority(request.getPriority());
-        if (request.getDueDate() != null) todo.setDueDate(request.getDueDate());
+        if (request.isClearDueDate()) {
+            todo.setDueDate(null);
+        } else if (request.getDueDate() != null) {
+            todo.setDueDate(request.getDueDate());
+        }
         return new TodoResponse(todo);
     }
 

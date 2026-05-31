@@ -19,4 +19,6 @@ public class UpdateTodoRequest {
     private Priority priority;
 
     private LocalDate dueDate;
+
+    private boolean clearDueDate = false;
 }
