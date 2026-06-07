@@ -53,7 +53,7 @@ public class TodoService {
         if (!fields.isEmpty()) throw validationError(fields);
 
         Todo todo = new Todo(
-                request.getTitle().trim(),
+                request.getTitle().strip(),
                 request.getDescription(),
                 request.getDueAt()
         );
@@ -66,7 +66,7 @@ public class TodoService {
         Todo todo = findTodo(id);
 
         if (request.isTitlePresent()) {
-            todo.updateTitle(request.getTitle().trim());
+            todo.updateTitle(request.getTitle().strip());
         }
         if (request.isDescriptionPresent()) {
             todo.updateDescription(request.getDescription());
