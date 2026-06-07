@@ -139,6 +139,7 @@ class TodoServiceTest {
         OffsetDateTime dueAt = OffsetDateTime.parse("2026-06-10T09:00:00+09:00");
         Todo todo = new Todo("기존 제목", "기존 설명", dueAt);
         given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         UpdateTodoRequest request = new UpdateTodoRequest();
         request.setDescription(null);
         request.setDueAt(null);
@@ -154,6 +155,7 @@ class TodoServiceTest {
     void setsAndClearsCompletedAtWhenCompletedChanges() {
         Todo todo = new Todo("할 일", null, null);
         given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         UpdateTodoRequest completeRequest = new UpdateTodoRequest();
         completeRequest.setCompleted(true);
 

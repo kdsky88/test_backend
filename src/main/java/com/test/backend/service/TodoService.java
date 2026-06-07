@@ -47,7 +47,11 @@ public class TodoService {
 
     @Transactional
     public ApiResponse<TodoResponse> createTodo(CreateTodoRequest request) {
-        validateTitle(request.getTitle());
+        Map<String, String> fields = new LinkedHashMap<>();
+        validateTitle(request.getTitle(), fields);
+        validateDescription(request.getDescription(), fields);
+        if (!fields.isEmpty()) throw validationError(fields);
+
         Todo todo = new Todo(
                 request.getTitle().trim(),
                 request.getDescription(),
@@ -73,7 +77,8 @@ public class TodoService {
         if (request.isCompletedPresent()) {
             todo.updateCompleted(request.getCompleted(), Instant.now());
         }
-        return new ApiResponse<>(new TodoResponse(todo));
+        // saveAndFlush로 @LastModifiedDate가 DB에 반영된 값을 응답에 포함
+        return new ApiResponse<>(new TodoResponse(todoRepository.saveAndFlush(todo)));
     }
 
     @Transactional
@@ -117,6 +122,9 @@ public class TodoService {
         if (request.isTitlePresent()) {
             validateTitle(request.getTitle(), fields);
         }
+        if (request.isDescriptionPresent()) {
+            validateDescription(request.getDescription(), fields);
+        }
         if (request.isCompletedPresent() && request.getCompleted() == null) {
             fields.put("completed", "completed는 null일 수 없습니다.");
         }
@@ -138,6 +146,12 @@ public class TodoService {
             fields.put("title", "title은 비어 있을 수 없습니다.");
         } else if (title.length() > 100) {
             fields.put("title", "title은 100자를 초과할 수 없습니다.");
+        }
+    }
+
+    private void validateDescription(String description, Map<String, String> fields) {
+        if (description != null && description.length() > 1000) {
+            fields.put("description", "description은 1000자를 초과할 수 없습니다.");
         }
     }
 
