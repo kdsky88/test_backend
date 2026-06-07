@@ -135,6 +135,30 @@ class TodoServiceTest {
     }
 
     @Test
+    void acceptsTitleOfExactlyOneHundredCharsAfterTrim() {
+        String paddedTitle = "  " + "가".repeat(100) + "  ";
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", paddedTitle);
+        given(todoRepository.save(any(Todo.class))).willAnswer(inv -> inv.getArgument(0));
+
+        ApiResponse<TodoResponse> response = todoService.createTodo(request);
+
+        assertThat(response.data().title()).isEqualTo("가".repeat(100));
+    }
+
+    @Test
+    void rejectsTitleOfOneHundredOneCharsAfterTrim() {
+        String paddedTitle = "  " + "가".repeat(101) + "  ";
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", paddedTitle);
+
+        assertThatThrownBy(() -> todoService.createTodo(request))
+                .isInstanceOfSatisfying(TodoApiException.class, ex ->
+                        assertThat(ex.getFields()).containsKey("title"));
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
     void distinguishesAbsentAndNullFieldsWhenUpdating() {
         OffsetDateTime dueAt = OffsetDateTime.parse("2026-06-10T09:00:00+09:00");
         Todo todo = new Todo("기존 제목", "기존 설명", dueAt);

@@ -142,9 +142,10 @@ public class TodoService {
     }
 
     private void validateTitle(String title, Map<String, String> fields) {
-        if (title == null || title.isBlank()) {
+        String trimmed = title == null ? null : title.strip();
+        if (trimmed == null || trimmed.isBlank()) {
             fields.put("title", "title은 비어 있을 수 없습니다.");
-        } else if (title.length() > 100) {
+        } else if (trimmed.length() > 100) {
             fields.put("title", "title은 100자를 초과할 수 없습니다.");
         }
     }
