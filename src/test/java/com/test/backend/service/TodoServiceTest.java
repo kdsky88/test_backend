@@ -1,23 +1,24 @@
 package com.test.backend.service;
 
 import com.test.backend.domain.entity.Todo;
-import com.test.backend.domain.entity.User;
+import com.test.backend.dto.request.CreateTodoRequest;
 import com.test.backend.dto.request.UpdateTodoRequest;
+import com.test.backend.dto.response.ApiResponse;
 import com.test.backend.dto.response.TodoListResponse;
 import com.test.backend.dto.response.TodoResponse;
 import com.test.backend.exception.TodoApiException;
 import com.test.backend.repository.TodoRepository;
-import com.test.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -26,43 +27,37 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class TodoServiceTest {
 
+    private static final String TODO_ID = "550e8400-e29b-41d4-a716-446655440000";
+
     @Mock
     private TodoRepository todoRepository;
 
-    @Mock
-    private UserRepository userRepository;
-
     private TodoService todoService;
-    private User user;
 
     @BeforeEach
     void setUp() {
-        todoService = new TodoService(todoRepository, userRepository);
-        user = new User();
-        user.setEmail("user@example.com");
-        ReflectionTestUtils.setField(user, "id", 1L);
-        lenient().when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        todoService = new TodoService(todoRepository);
     }
 
     @Test
-    void getsTodosWithOneBasedPageAndStableSort() {
-        Todo todo = new Todo("할 일", null, null, user);
-        ReflectionTestUtils.setField(todo, "id", 10L);
-        given(todoRepository.findByUserId(any(), any()))
-                .willReturn(new PageImpl<>(List.of(todo)));
+    void getsActiveTodosWithOneBasedPageAndStableSort() {
+        Todo todo = new Todo("할 일", null, null);
+        PageRequest requestedPage = PageRequest.of(1, 30);
+        given(todoRepository.findByCompleted(anyBoolean(), any()))
+                .willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
 
-        TodoListResponse response = todoService.getTodos(user.getEmail(), 2, 30);
+        TodoListResponse response = todoService.getTodos("active", 2, 30);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(todoRepository).findByUserId(org.mockito.ArgumentMatchers.eq(1L), pageableCaptor.capture());
+        verify(todoRepository).findByCompleted(org.mockito.ArgumentMatchers.eq(false), pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(1);
         assertThat(pageable.getPageSize()).isEqualTo(30);
@@ -70,15 +65,63 @@ class TodoServiceTest {
         assertThat(pageable.getSort().getOrderFor("createdAt").getDirection()).isEqualTo(Sort.Direction.DESC);
         assertThat(pageable.getSort().getOrderFor("id").getDirection()).isEqualTo(Sort.Direction.DESC);
         assertThat(response.meta().page()).isEqualTo(2);
-        assertThat(response.data()).extracting(TodoResponse::id).containsExactly(10L);
+        assertThat(response.meta().limit()).isEqualTo(30);
     }
 
     @Test
-    void rejectsPageAndLimitOutsideAllowedRange() {
-        assertThatThrownBy(() -> todoService.getTodos(user.getEmail(), 0, 101))
+    void supportsAllAndCompletedStatusFilters() {
+        given(todoRepository.findAll(any(Pageable.class))).willReturn(Page.empty());
+        given(todoRepository.findByCompleted(anyBoolean(), any())).willReturn(Page.empty());
+
+        todoService.getTodos("all", 1, 20);
+        todoService.getTodos("completed", 1, 20);
+
+        verify(todoRepository).findAll(any(Pageable.class));
+        verify(todoRepository).findByCompleted(true, PageRequest.of(
+                0,
+                20,
+                Sort.by(
+                        Sort.Order.asc("completed"),
+                        Sort.Order.desc("createdAt"),
+                        Sort.Order.desc("id")
+                )
+        ));
+    }
+
+    @Test
+    void rejectsInvalidListParametersWithValidationError() {
+        assertThatThrownBy(() -> todoService.getTodos("unknown", 0, 101))
                 .isInstanceOfSatisfying(TodoApiException.class, exception -> {
-                    assertThat(exception.getCode()).isEqualTo("INVALID_REQUEST");
-                    assertThat(exception.getFields()).containsKeys("page", "limit");
+                    assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(exception.getFields()).containsKeys("status", "page", "limit");
+                });
+
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
+    void createsTodoWithUuidAndOneHundredCharacterTitleLimit() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", " 할 일 ");
+        given(todoRepository.save(any(Todo.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        ApiResponse<TodoResponse> response = todoService.createTodo(request);
+
+        assertThat(response.data().id()).matches(
+                "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+        );
+        assertThat(response.data().title()).isEqualTo("할 일");
+    }
+
+    @Test
+    void rejectsTitleLongerThanOneHundredCharacters() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "a".repeat(101));
+
+        assertThatThrownBy(() -> todoService.createTodo(request))
+                .isInstanceOfSatisfying(TodoApiException.class, exception -> {
+                    assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(exception.getFields()).containsKey("title");
                 });
 
         verifyNoInteractions(todoRepository);
@@ -87,13 +130,13 @@ class TodoServiceTest {
     @Test
     void distinguishesAbsentAndNullFieldsWhenUpdating() {
         OffsetDateTime dueAt = OffsetDateTime.parse("2026-06-10T09:00:00+09:00");
-        Todo todo = new Todo("기존 제목", "기존 설명", dueAt, user);
-        given(todoRepository.findByIdAndUserId(5L, 1L)).willReturn(Optional.of(todo));
+        Todo todo = new Todo("기존 제목", "기존 설명", dueAt);
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
         UpdateTodoRequest request = new UpdateTodoRequest();
         request.setDescription(null);
         request.setDueAt(null);
 
-        TodoResponse response = todoService.updateTodo(user.getEmail(), 5L, request);
+        TodoResponse response = todoService.updateTodo(TODO_ID, request).data();
 
         assertThat(response.title()).isEqualTo("기존 제목");
         assertThat(response.description()).isNull();
@@ -101,35 +144,32 @@ class TodoServiceTest {
     }
 
     @Test
-    void setsAndClearsCompletedAtOnlyWhenCompletedChanges() {
-        Todo todo = new Todo("할 일", null, null, user);
-        given(todoRepository.findByIdAndUserId(5L, 1L)).willReturn(Optional.of(todo));
+    void setsAndClearsCompletedAtWhenCompletedChanges() {
+        Todo todo = new Todo("할 일", null, null);
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
         UpdateTodoRequest completeRequest = new UpdateTodoRequest();
         completeRequest.setCompleted(true);
 
-        TodoResponse completed = todoService.updateTodo(user.getEmail(), 5L, completeRequest);
+        TodoResponse completed = todoService.updateTodo(TODO_ID, completeRequest).data();
 
         assertThat(completed.completed()).isTrue();
         assertThat(completed.completedAt()).isNotNull();
 
         UpdateTodoRequest reopenRequest = new UpdateTodoRequest();
         reopenRequest.setCompleted(false);
-        TodoResponse reopened = todoService.updateTodo(user.getEmail(), 5L, reopenRequest);
+        TodoResponse reopened = todoService.updateTodo(TODO_ID, reopenRequest).data();
 
         assertThat(reopened.completed()).isFalse();
         assertThat(reopened.completedAt()).isNull();
     }
 
     @Test
-    void rejectsNullForNonNullablePatchFields() {
-        UpdateTodoRequest request = new UpdateTodoRequest();
-        request.setTitle(null);
-        request.setCompleted(null);
+    void deletesExistingTodo() {
+        Todo todo = new Todo("할 일", null, null);
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
 
-        assertThatThrownBy(() -> todoService.updateTodo(user.getEmail(), 5L, request))
-                .isInstanceOfSatisfying(TodoApiException.class, exception ->
-                        assertThat(exception.getFields()).containsKeys("title", "completed"));
+        todoService.deleteTodo(TODO_ID);
 
-        verifyNoInteractions(todoRepository);
+        verify(todoRepository).delete(todo);
     }
 }

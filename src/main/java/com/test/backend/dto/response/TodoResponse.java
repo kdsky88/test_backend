@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 
 public record TodoResponse(
-        Long id,
+        String id,
         String title,
         String description,
         boolean completed,
