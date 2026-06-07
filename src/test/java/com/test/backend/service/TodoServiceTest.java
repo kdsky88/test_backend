@@ -89,13 +89,20 @@ class TodoServiceTest {
     }
 
     @Test
-    void rejectsInvalidListParametersWithValidationError() {
-        assertThatThrownBy(() -> todoService.getTodos("unknown", 0, 101))
+    void rejectsInvalidStatusWithInvalidFilter() {
+        assertThatThrownBy(() -> todoService.getTodos("unknown", 1, 20))
+                .isInstanceOfSatisfying(TodoApiException.class, exception ->
+                    assertThat(exception.getCode()).isEqualTo("INVALID_FILTER"));
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
+    void rejectsInvalidPageAndLimitWithValidationError() {
+        assertThatThrownBy(() -> todoService.getTodos("all", 0, 101))
                 .isInstanceOfSatisfying(TodoApiException.class, exception -> {
                     assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
-                    assertThat(exception.getFields()).containsKeys("status", "page", "limit");
+                    assertThat(exception.getFields()).containsKeys("page", "limit");
                 });
-
         verifyNoInteractions(todoRepository);
     }
 

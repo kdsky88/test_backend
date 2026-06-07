@@ -100,7 +100,8 @@ public class TodoService {
         }
         TodoStatus todoStatus = TodoStatus.from(status);
         if (todoStatus == null) {
-            fields.put("status", "status는 all, active, completed 중 하나여야 합니다.");
+            throw new TodoApiException(HttpStatus.BAD_REQUEST, "INVALID_FILTER",
+                "status는 all, active, completed 중 하나여야 합니다.");
         }
         if (!fields.isEmpty()) {
             throw validationError(fields);
