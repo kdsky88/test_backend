@@ -1,0 +1,52 @@
+package com.test.backend.dto.request;
+
+import com.fasterxml.jackson.annotation.JsonSetter;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import java.time.OffsetDateTime;
+
+@Getter
+@NoArgsConstructor
+public class UpdateTodoRequest {
+
+    private boolean titlePresent;
+    private String title;
+
+    private boolean descriptionPresent;
+    private String description;
+
+    private boolean dueAtPresent;
+    private OffsetDateTime dueAt;
+
+    private boolean completedPresent;
+    private Boolean completed;
+
+    @JsonSetter("title")
+    public void setTitle(String title) {
+        this.titlePresent = true;
+        this.title = title;
+    }
+
+    @JsonSetter("description")
+    public void setDescription(String description) {
+        this.descriptionPresent = true;
+        this.description = description;
+    }
+
+    @JsonSetter("dueAt")
+    public void setDueAt(OffsetDateTime dueAt) {
+        this.dueAtPresent = true;
+        this.dueAt = dueAt;
+    }
+
+    @JsonSetter("completed")
+    public void setCompleted(Boolean completed) {
+        this.completedPresent = true;
+        this.completed = completed;
+    }
+
+    public boolean hasAnyField() {
+        return titlePresent || descriptionPresent || dueAtPresent || completedPresent;
+    }
+}
