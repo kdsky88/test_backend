@@ -29,7 +29,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String token = resolveToken(request);
 
-        if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
+        if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)
+                && "access".equals(jwtTokenProvider.getTokenType(token))) {
             String email = jwtTokenProvider.getEmail(token);
             userRepository.findByEmail(email).ifPresent(user -> {
                 UsernamePasswordAuthenticationToken authentication =

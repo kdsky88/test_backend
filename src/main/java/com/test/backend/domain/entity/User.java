@@ -34,6 +34,7 @@ public class User {
     @Enumerated(EnumType.STRING)
     private Role role = Role.USER;
 
+    @Column(length = 512)
     private String refreshToken;
 
     @CreatedDate
