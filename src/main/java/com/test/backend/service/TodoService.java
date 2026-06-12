@@ -16,9 +16,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.test.backend.dto.response.CalendarResponse;
 import java.time.Instant;
+import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -84,6 +89,30 @@ public class TodoService {
     @Transactional
     public void deleteTodo(String id) {
         todoRepository.delete(findTodo(id));
+    }
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
+    @Transactional(readOnly = true)
+    public CalendarResponse getCalendar(int year, int month) {
+        Map<String, String> err = new LinkedHashMap<>();
+        if (year < 1) err.put("year", "유효한 연도를 입력해 주세요.");
+        if (month < 1 || month > 12) err.put("month", "month는 1~12이어야 합니다.");
+        if (!err.isEmpty()) throw validationError(err);
+
+        YearMonth ym = YearMonth.of(year, month);
+        var start = ym.atDay(1).atStartOfDay(KST).toOffsetDateTime();
+        var end   = ym.plusMonths(1).atDay(1).atStartOfDay(KST).toOffsetDateTime();
+
+        Map<String, List<TodoResponse>> grouped = todoRepository
+            .findByDueAtBetween(start, end)
+            .stream()
+            .collect(Collectors.groupingBy(
+                t -> t.getDueAt().atZoneSameInstant(KST).toLocalDate().toString(),
+                LinkedHashMap::new,
+                Collectors.mapping(TodoResponse::new, Collectors.toList())
+            ));
+        return new CalendarResponse(grouped);
     }
 
     private Todo findTodo(String id) {

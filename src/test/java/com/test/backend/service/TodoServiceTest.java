@@ -4,6 +4,7 @@ import com.test.backend.domain.entity.Todo;
 import com.test.backend.dto.request.CreateTodoRequest;
 import com.test.backend.dto.request.UpdateTodoRequest;
 import com.test.backend.dto.response.ApiResponse;
+import com.test.backend.dto.response.CalendarResponse;
 import com.test.backend.dto.response.TodoListResponse;
 import com.test.backend.dto.response.TodoResponse;
 import com.test.backend.exception.TodoApiException;
@@ -204,5 +205,26 @@ class TodoServiceTest {
         todoService.deleteTodo(TODO_ID);
 
         verify(todoRepository).delete(todo);
+    }
+
+    @Test
+    void groupsTodosByKstDate() {
+        given(todoRepository.findByDueAtBetween(any(), any())).willReturn(List.of(
+            new Todo("아침", null, OffsetDateTime.parse("2026-06-15T00:00:00+09:00")),
+            new Todo("저녁", null, OffsetDateTime.parse("2026-06-15T21:00:00+09:00"))
+        ));
+
+        CalendarResponse res = todoService.getCalendar(2026, 6);
+
+        assertThat(res.data()).containsKey("2026-06-15");
+        assertThat(res.data().get("2026-06-15")).hasSize(2);
+    }
+
+    @Test
+    void rejectsInvalidMonthInCalendar() {
+        assertThatThrownBy(() -> todoService.getCalendar(2026, 13))
+            .isInstanceOfSatisfying(TodoApiException.class,
+                ex -> assertThat(ex.getCode()).isEqualTo("VALIDATION_ERROR"));
+        verifyNoInteractions(todoRepository);
     }
 }

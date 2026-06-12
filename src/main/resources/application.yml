@@ -20,6 +20,6 @@ server:
   port: 8080
 
 jwt:
-  secret: your-secret-key-must-be-at-least-256-bits-long-for-hs256
-  access-token-expiration: 3600000
-  refresh-token-expiration: 604800000
+  secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hs256}
+  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:3600000}
+  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000}
