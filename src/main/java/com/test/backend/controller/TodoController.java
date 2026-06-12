@@ -3,6 +3,7 @@ package com.test.backend.controller;
 import com.test.backend.dto.request.CreateTodoRequest;
 import com.test.backend.dto.request.UpdateTodoRequest;
 import com.test.backend.dto.response.ApiResponse;
+import com.test.backend.dto.response.CalendarResponse;
 import com.test.backend.dto.response.TodoListResponse;
 import com.test.backend.dto.response.TodoResponse;
 import com.test.backend.service.TodoService;
@@ -25,6 +26,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class TodoController {
 
     private final TodoService todoService;
+
+    @GetMapping("/calendar")
+    public ResponseEntity<CalendarResponse> getCalendar(
+            @RequestParam int year,
+            @RequestParam int month) {
+        return ResponseEntity.ok(todoService.getCalendar(year, month));
+    }
 
     @GetMapping
     public ResponseEntity<TodoListResponse> getTodos(
