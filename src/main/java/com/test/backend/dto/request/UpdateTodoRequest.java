@@ -22,6 +22,9 @@ public class UpdateTodoRequest {
     private boolean completedPresent;
     private Boolean completed;
 
+    private boolean priorityPresent;
+    private String priority;
+
     @JsonSetter("title")
     public void setTitle(String title) {
         this.titlePresent = true;
@@ -46,7 +49,13 @@ public class UpdateTodoRequest {
         this.completed = completed;
     }
 
+    @JsonSetter("priority")
+    public void setPriority(String priority) {
+        this.priorityPresent = true;
+        this.priority = priority;
+    }
+
     public boolean hasAnyField() {
-        return titlePresent || descriptionPresent || dueAtPresent || completedPresent;
+        return titlePresent || descriptionPresent || dueAtPresent || completedPresent || priorityPresent;
     }
 }

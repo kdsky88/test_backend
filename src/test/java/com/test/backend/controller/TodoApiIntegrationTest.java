@@ -2,6 +2,8 @@ package com.test.backend.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.test.backend.repository.TodoRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -26,6 +28,14 @@ class TodoApiIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private TodoRepository todoRepository;
+
+    @BeforeEach
+    void cleanUp() {
+        todoRepository.deleteAll();
+    }
+
     @Test
     void supportsPublicCrudFlow() throws Exception {
         MvcResult createResult = mockMvc.perform(post("/todos")
@@ -33,12 +43,14 @@ class TodoApiIntegrationTest {
                         .content("""
                                 {
                                   "title":"통합 테스트",
+                                  "priority":"HIGH",
                                   "dueAt":"2026-06-10T09:00:00+09:00"
                                 }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.id").isString())
                 .andExpect(jsonPath("$.data.completed").value(false))
+                .andExpect(jsonPath("$.data.priority").value("HIGH"))
                 .andReturn();
 
         JsonNode createBody = objectMapper.readTree(createResult.getResponse().getContentAsString());
@@ -69,5 +81,41 @@ class TodoApiIntegrationTest {
                                 """))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("TODO_NOT_FOUND"));
+    }
+
+    @Test
+    void appliesDefaultPrioritySortAndRejectsInvalidPriority() throws Exception {
+        createTodo("낮음", "LOW");
+        createTodo("높음", "HIGH");
+        mockMvc.perform(post("/todos")
+                        .contentType("application/json")
+                        .content("""
+                                {"title":"보통"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.priority").value("MEDIUM"));
+
+        mockMvc.perform(get("/todos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].priority").value("HIGH"))
+                .andExpect(jsonPath("$.data[1].priority").value("MEDIUM"))
+                .andExpect(jsonPath("$.data[2].priority").value("LOW"));
+
+        mockMvc.perform(post("/todos")
+                        .contentType("application/json")
+                        .content("""
+                                {"title":"잘못된 값","priority":null}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_PRIORITY"));
+    }
+
+    private void createTodo(String title, String priority) throws Exception {
+        mockMvc.perform(post("/todos")
+                        .contentType("application/json")
+                        .content("""
+                                {"title":"%s","priority":"%s"}
+                                """.formatted(title, priority)))
+                .andExpect(status().isCreated());
     }
 }

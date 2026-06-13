@@ -3,6 +3,8 @@ package com.test.backend.domain.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -35,6 +37,10 @@ public class Todo {
     @Column(nullable = false)
     private boolean completed;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10, columnDefinition = "VARCHAR(10) DEFAULT 'MEDIUM'")
+    private TodoPriority priority = TodoPriority.MEDIUM;
+
     private OffsetDateTime dueAt;
 
     private Instant completedAt;
@@ -48,10 +54,15 @@ public class Todo {
     private Instant updatedAt;
 
     public Todo(String title, String description, OffsetDateTime dueAt) {
+        this(title, description, dueAt, TodoPriority.MEDIUM);
+    }
+
+    public Todo(String title, String description, OffsetDateTime dueAt, TodoPriority priority) {
         this.id = UUID.randomUUID().toString();
         this.title = title;
         this.description = description;
         this.dueAt = dueAt;
+        this.priority = priority;
     }
 
     public void updateTitle(String title) {
@@ -64,6 +75,10 @@ public class Todo {
 
     public void updateDueAt(OffsetDateTime dueAt) {
         this.dueAt = dueAt;
+    }
+
+    public void updatePriority(TodoPriority priority) {
+        this.priority = priority;
     }
 
     public void updateCompleted(boolean completed, Instant changedAt) {
