@@ -1,5 +1,6 @@
 package com.test.backend.controller;
 
+import com.test.backend.domain.entity.TodoPriority;
 import com.test.backend.dto.response.ApiResponse;
 import com.test.backend.dto.response.TodoListResponse;
 import com.test.backend.dto.response.TodoResponse;
@@ -68,6 +69,7 @@ class TodoControllerTest {
                 "할 일",
                 null,
                 false,
+                TodoPriority.MEDIUM,
                 null,
                 null,
                 null,

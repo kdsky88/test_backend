@@ -1,6 +1,7 @@
 package com.test.backend.service;
 
 import com.test.backend.domain.entity.Todo;
+import com.test.backend.domain.entity.TodoPriority;
 import com.test.backend.dto.request.CreateTodoRequest;
 import com.test.backend.dto.request.UpdateTodoRequest;
 import com.test.backend.dto.response.ApiResponse;
@@ -19,7 +20,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -52,41 +52,34 @@ class TodoServiceTest {
     void getsActiveTodosWithOneBasedPageAndStableSort() {
         Todo todo = new Todo("할 일", null, null);
         PageRequest requestedPage = PageRequest.of(1, 30);
-        given(todoRepository.findByCompleted(anyBoolean(), any()))
+        given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), any()))
                 .willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
 
         TodoListResponse response = todoService.getTodos("active", 2, 30);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(todoRepository).findByCompleted(org.mockito.ArgumentMatchers.eq(false), pageableCaptor.capture());
+        verify(todoRepository).findByCompletedOrderByPriority(
+                org.mockito.ArgumentMatchers.eq(false),
+                pageableCaptor.capture()
+        );
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(1);
         assertThat(pageable.getPageSize()).isEqualTo(30);
-        assertThat(pageable.getSort().getOrderFor("completed").getDirection()).isEqualTo(Sort.Direction.ASC);
-        assertThat(pageable.getSort().getOrderFor("createdAt").getDirection()).isEqualTo(Sort.Direction.DESC);
-        assertThat(pageable.getSort().getOrderFor("id").getDirection()).isEqualTo(Sort.Direction.DESC);
+        assertThat(pageable.getSort().isUnsorted()).isTrue();
         assertThat(response.meta().page()).isEqualTo(2);
         assertThat(response.meta().limit()).isEqualTo(30);
     }
 
     @Test
     void supportsAllAndCompletedStatusFilters() {
-        given(todoRepository.findAll(any(Pageable.class))).willReturn(Page.empty());
-        given(todoRepository.findByCompleted(anyBoolean(), any())).willReturn(Page.empty());
+        given(todoRepository.findAllByPriorityOrder(any(Pageable.class))).willReturn(Page.empty());
+        given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), any())).willReturn(Page.empty());
 
         todoService.getTodos("all", 1, 20);
         todoService.getTodos("completed", 1, 20);
 
-        verify(todoRepository).findAll(any(Pageable.class));
-        verify(todoRepository).findByCompleted(true, PageRequest.of(
-                0,
-                20,
-                Sort.by(
-                        Sort.Order.asc("completed"),
-                        Sort.Order.desc("createdAt"),
-                        Sort.Order.desc("id")
-                )
-        ));
+        verify(todoRepository).findAllByPriorityOrder(any(Pageable.class));
+        verify(todoRepository).findByCompletedOrderByPriority(true, PageRequest.of(0, 20));
     }
 
     @Test
@@ -119,6 +112,39 @@ class TodoServiceTest {
                 "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
         );
         assertThat(response.data().title()).isEqualTo("할 일");
+        assertThat(response.data().priority()).isEqualTo(TodoPriority.MEDIUM);
+    }
+
+    @Test
+    void createsTodoWithRequestedPriority() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "긴급 작업");
+        request.setPriority("HIGH");
+        given(todoRepository.save(any(Todo.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        TodoResponse response = todoService.createTodo(request).data();
+
+        assertThat(response.priority()).isEqualTo(TodoPriority.HIGH);
+    }
+
+    @Test
+    void rejectsInvalidOrNullPriorityOnCreate() {
+        CreateTodoRequest invalid = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(invalid, "title", "할 일");
+        invalid.setPriority("URGENT");
+
+        assertThatThrownBy(() -> todoService.createTodo(invalid))
+                .isInstanceOfSatisfying(TodoApiException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo("INVALID_PRIORITY"));
+
+        CreateTodoRequest nullPriority = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(nullPriority, "title", "할 일");
+        nullPriority.setPriority(null);
+
+        assertThatThrownBy(() -> todoService.createTodo(nullPriority))
+                .isInstanceOfSatisfying(TodoApiException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo("INVALID_PRIORITY"));
+        verifyNoInteractions(todoRepository);
     }
 
     @Test
@@ -195,6 +221,36 @@ class TodoServiceTest {
 
         assertThat(reopened.completed()).isFalse();
         assertThat(reopened.completedAt()).isNull();
+    }
+
+    @Test
+    void updatesPriorityAndKeepsItWhenOmitted() {
+        Todo todo = new Todo("할 일", null, null, TodoPriority.LOW);
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
+
+        UpdateTodoRequest updatePriority = new UpdateTodoRequest();
+        updatePriority.setPriority("HIGH");
+        assertThat(todoService.updateTodo(TODO_ID, updatePriority).data().priority())
+                .isEqualTo(TodoPriority.HIGH);
+
+        UpdateTodoRequest updateTitleOnly = new UpdateTodoRequest();
+        updateTitleOnly.setTitle("제목 변경");
+        assertThat(todoService.updateTodo(TODO_ID, updateTitleOnly).data().priority())
+                .isEqualTo(TodoPriority.HIGH);
+    }
+
+    @Test
+    void rejectsNullPriorityWithoutChangingTodo() {
+        Todo todo = new Todo("할 일", null, null, TodoPriority.LOW);
+        UpdateTodoRequest request = new UpdateTodoRequest();
+        request.setPriority(null);
+
+        assertThatThrownBy(() -> todoService.updateTodo(TODO_ID, request))
+                .isInstanceOfSatisfying(TodoApiException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo("INVALID_PRIORITY"));
+        assertThat(todo.getPriority()).isEqualTo(TodoPriority.LOW);
+        verifyNoInteractions(todoRepository);
     }
 
     @Test

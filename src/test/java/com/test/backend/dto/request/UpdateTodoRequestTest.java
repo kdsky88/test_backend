@@ -18,7 +18,8 @@ class UpdateTodoRequestTest {
                 """
                 {
                   "description": null,
-                  "completed": true
+                  "completed": true,
+                  "priority": "HIGH"
                 }
                 """,
                 UpdateTodoRequest.class
@@ -29,6 +30,8 @@ class UpdateTodoRequestTest {
         assertThat(request.getDescription()).isNull();
         assertThat(request.isCompletedPresent()).isTrue();
         assertThat(request.getCompleted()).isTrue();
+        assertThat(request.isPriorityPresent()).isTrue();
+        assertThat(request.getPriority()).isEqualTo("HIGH");
     }
 
     @Test

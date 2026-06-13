@@ -1,6 +1,7 @@
 package com.test.backend.service;
 
 import com.test.backend.domain.entity.Todo;
+import com.test.backend.domain.entity.TodoPriority;
 import com.test.backend.dto.request.CreateTodoRequest;
 import com.test.backend.dto.request.UpdateTodoRequest;
 import com.test.backend.dto.response.ApiResponse;
@@ -11,7 +12,6 @@ import com.test.backend.repository.TodoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,22 +29,16 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TodoService {
 
-    private static final Sort TODO_SORT = Sort.by(
-            Sort.Order.asc("completed"),
-            Sort.Order.desc("createdAt"),
-            Sort.Order.desc("id")
-    );
-
     private final TodoRepository todoRepository;
 
     @Transactional(readOnly = true)
     public TodoListResponse getTodos(String status, int page, int limit) {
         TodoStatus todoStatus = validateListRequest(status, page, limit);
-        PageRequest pageable = PageRequest.of(page - 1, limit, TODO_SORT);
+        PageRequest pageable = PageRequest.of(page - 1, limit);
         Page<Todo> todoPage = switch (todoStatus) {
-            case ALL -> todoRepository.findAll(pageable);
-            case ACTIVE -> todoRepository.findByCompleted(false, pageable);
-            case COMPLETED -> todoRepository.findByCompleted(true, pageable);
+            case ALL -> todoRepository.findAllByPriorityOrder(pageable);
+            case ACTIVE -> todoRepository.findByCompletedOrderByPriority(false, pageable);
+            case COMPLETED -> todoRepository.findByCompletedOrderByPriority(true, pageable);
         };
         Page<TodoResponse> todos = todoPage.map(TodoResponse::new);
         return TodoListResponse.from(todos, page);
@@ -55,12 +49,19 @@ public class TodoService {
         Map<String, String> fields = new LinkedHashMap<>();
         validateTitle(request.getTitle(), fields);
         validateDescription(request.getDescription(), fields);
-        if (!fields.isEmpty()) throw validationError(fields);
+        TodoPriority priority = resolveCreatePriority(request, fields);
+        if (!fields.isEmpty()) {
+            if (fields.containsKey("priority")) {
+                throw invalidPriority();
+            }
+            throw validationError(fields);
+        }
 
         Todo todo = new Todo(
                 request.getTitle().strip(),
                 request.getDescription(),
-                request.getDueAt()
+                request.getDueAt(),
+                priority
         );
         return new ApiResponse<>(new TodoResponse(todoRepository.save(todo)));
     }
@@ -81,6 +82,9 @@ public class TodoService {
         }
         if (request.isCompletedPresent()) {
             todo.updateCompleted(request.getCompleted(), Instant.now());
+        }
+        if (request.isPriorityPresent()) {
+            todo.updatePriority(parsePriority(request.getPriority()));
         }
         // saveAndFlush로 @LastModifiedDate가 DB에 반영된 값을 응답에 포함
         return new ApiResponse<>(new TodoResponse(todoRepository.saveAndFlush(todo)));
@@ -157,9 +161,47 @@ public class TodoService {
         if (request.isCompletedPresent() && request.getCompleted() == null) {
             fields.put("completed", "completed는 null일 수 없습니다.");
         }
+        if (request.isPriorityPresent()) {
+            validatePriority(request.getPriority(), fields);
+        }
         if (!fields.isEmpty()) {
+            if (fields.containsKey("priority")) {
+                throw invalidPriority();
+            }
             throw validationError(fields);
         }
+    }
+
+    private TodoPriority resolveCreatePriority(CreateTodoRequest request, Map<String, String> fields) {
+        if (!request.isPriorityPresent()) {
+            return TodoPriority.MEDIUM;
+        }
+        validatePriority(request.getPriority(), fields);
+        return fields.containsKey("priority") ? null : parsePriority(request.getPriority());
+    }
+
+    private void validatePriority(String priority, Map<String, String> fields) {
+        if (priority == null) {
+            fields.put("priority", "priority must be one of HIGH, MEDIUM, LOW");
+            return;
+        }
+        try {
+            TodoPriority.valueOf(priority);
+        } catch (IllegalArgumentException exception) {
+            fields.put("priority", "priority must be one of HIGH, MEDIUM, LOW");
+        }
+    }
+
+    private TodoPriority parsePriority(String priority) {
+        return TodoPriority.valueOf(priority);
+    }
+
+    private TodoApiException invalidPriority() {
+        return new TodoApiException(
+                HttpStatus.BAD_REQUEST,
+                "INVALID_PRIORITY",
+                "priority must be one of HIGH, MEDIUM, LOW"
+        );
     }
 
     private void validateTitle(String title) {
