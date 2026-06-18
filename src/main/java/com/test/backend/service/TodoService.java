@@ -39,15 +39,32 @@ public class TodoService {
 
     @Transactional(readOnly = true)
     public TodoListResponse getTodos(String status, int page, int limit) {
-        TodoStatus todoStatus = validateListRequest(status, page, limit);
+        return getTodos(status, page, limit, null);
+    }
+
+    @Transactional(readOnly = true)
+    public TodoListResponse getTodos(String status, int page, int limit, String search) {
+        TodoStatus todoStatus = validateListRequest(status, page, limit, search);
+        String searchKeyword = normalizeSearch(search);
         PageRequest pageable = PageRequest.of(page - 1, limit, TODO_SORT);
-        Page<Todo> todoPage = switch (todoStatus) {
-            case ALL -> todoRepository.findAll(pageable);
-            case ACTIVE -> todoRepository.findByCompleted(false, pageable);
-            case COMPLETED -> todoRepository.findByCompleted(true, pageable);
-        };
+        Page<Todo> todoPage = getTodoPage(todoStatus, searchKeyword, pageable);
         Page<TodoResponse> todos = todoPage.map(TodoResponse::new);
         return TodoListResponse.from(todos, page);
+    }
+
+    private Page<Todo> getTodoPage(TodoStatus todoStatus, String searchKeyword, PageRequest pageable) {
+        if (searchKeyword == null) {
+            return switch (todoStatus) {
+                case ALL -> todoRepository.findAll(pageable);
+                case ACTIVE -> todoRepository.findByCompleted(false, pageable);
+                case COMPLETED -> todoRepository.findByCompleted(true, pageable);
+            };
+        }
+        return switch (todoStatus) {
+            case ALL -> todoRepository.findByTitleContainingIgnoreCase(searchKeyword, pageable);
+            case ACTIVE -> todoRepository.findByCompletedAndTitleContainingIgnoreCase(false, searchKeyword, pageable);
+            case COMPLETED -> todoRepository.findByCompletedAndTitleContainingIgnoreCase(true, searchKeyword, pageable);
+        };
     }
 
     @Transactional
@@ -124,13 +141,17 @@ public class TodoService {
                 ));
     }
 
-    private TodoStatus validateListRequest(String status, int page, int limit) {
+    private TodoStatus validateListRequest(String status, int page, int limit, String search) {
         Map<String, String> fields = new LinkedHashMap<>();
         if (page < 1) {
             fields.put("page", "page는 1 이상이어야 합니다.");
         }
         if (limit < 1 || limit > 100) {
             fields.put("limit", "limit는 1 이상 100 이하여야 합니다.");
+        }
+        String trimmedSearch = normalizeSearch(search);
+        if (trimmedSearch != null && trimmedSearch.length() > 100) {
+            fields.put("search", "search는 100자를 초과할 수 없습니다.");
         }
         TodoStatus todoStatus = TodoStatus.from(status);
         if (todoStatus == null) {
@@ -141,6 +162,14 @@ public class TodoService {
             throw validationError(fields);
         }
         return todoStatus;
+    }
+
+    private String normalizeSearch(String search) {
+        if (search == null) {
+            return null;
+        }
+        String trimmed = search.strip();
+        return trimmed.isBlank() ? null : trimmed;
     }
 
     private void validateUpdateRequest(UpdateTodoRequest request) {

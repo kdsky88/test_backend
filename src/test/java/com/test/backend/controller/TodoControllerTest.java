@@ -43,7 +43,7 @@ class TodoControllerTest {
 
     @Test
     void returnsFilteredListWithDataAndMeta() throws Exception {
-        given(todoService.getTodos("active", 2, 10))
+        given(todoService.getTodos("active", 2, 10, null))
                 .willReturn(new TodoListResponse(
                         List.of(),
                         new TodoListResponse.Meta(2, 10, 0, 0)
@@ -58,7 +58,22 @@ class TodoControllerTest {
                 .andExpect(jsonPath("$.meta.page").value(2))
                 .andExpect(jsonPath("$.meta.limit").value(10));
 
-        verify(todoService).getTodos("active", 2, 10);
+        verify(todoService).getTodos("active", 2, 10, null);
+    }
+
+    @Test
+    void passesSearchKeywordToTodoService() throws Exception {
+        given(todoService.getTodos("all", 1, 20, "테스트"))
+                .willReturn(new TodoListResponse(
+                        List.of(),
+                        new TodoListResponse.Meta(1, 20, 0, 0)
+                ));
+
+        mockMvc.perform(get("/todos").param("search", "테스트"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray());
+
+        verify(todoService).getTodos("all", 1, 20, "테스트");
     }
 
     @Test

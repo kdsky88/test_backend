@@ -90,6 +90,52 @@ class TodoServiceTest {
     }
 
     @Test
+    void searchesTodosByTrimmedTitleKeywordIgnoringCase() {
+        Todo todo = new Todo("Spring Boot 검색", null, null);
+        PageRequest requestedPage = PageRequest.of(0, 20);
+        given(todoRepository.findByTitleContainingIgnoreCase(any(), any()))
+                .willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
+
+        TodoListResponse response = todoService.getTodos("all", 1, 20, "  spring  ");
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(todoRepository).findByTitleContainingIgnoreCase(
+                org.mockito.ArgumentMatchers.eq("spring"),
+                pageableCaptor.capture()
+        );
+        assertThat(pageableCaptor.getValue().getPageNumber()).isZero();
+        assertThat(response.data()).extracting(TodoResponse::title).containsExactly("Spring Boot 검색");
+        assertThat(response.meta().total()).isEqualTo(1);
+    }
+
+    @Test
+    void searchesTodosWithStatusFilter() {
+        given(todoRepository.findByCompletedAndTitleContainingIgnoreCase(anyBoolean(), any(), any()))
+                .willReturn(Page.empty());
+
+        todoService.getTodos("completed", 1, 20, "완료");
+
+        verify(todoRepository).findByCompletedAndTitleContainingIgnoreCase(true, "완료", PageRequest.of(
+                0,
+                20,
+                Sort.by(
+                        Sort.Order.asc("completed"),
+                        Sort.Order.desc("createdAt"),
+                        Sort.Order.desc("id")
+                )
+        ));
+    }
+
+    @Test
+    void blankSearchFallsBackToNormalList() {
+        given(todoRepository.findAll(any(Pageable.class))).willReturn(Page.empty());
+
+        todoService.getTodos("all", 1, 20, "   ");
+
+        verify(todoRepository).findAll(any(Pageable.class));
+    }
+
+    @Test
     void rejectsInvalidStatusWithInvalidFilter() {
         assertThatThrownBy(() -> todoService.getTodos("unknown", 1, 20))
                 .isInstanceOfSatisfying(TodoApiException.class, exception ->
@@ -103,6 +149,16 @@ class TodoServiceTest {
                 .isInstanceOfSatisfying(TodoApiException.class, exception -> {
                     assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
                     assertThat(exception.getFields()).containsKeys("page", "limit");
+        });
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
+    void rejectsSearchLongerThanOneHundredCharacters() {
+        assertThatThrownBy(() -> todoService.getTodos("all", 1, 20, "a".repeat(101)))
+                .isInstanceOfSatisfying(TodoApiException.class, exception -> {
+                    assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(exception.getFields()).containsKey("search");
                 });
         verifyNoInteractions(todoRepository);
     }

@@ -38,8 +38,9 @@ public class TodoController {
     public ResponseEntity<TodoListResponse> getTodos(
             @RequestParam(defaultValue = "all") String status,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int limit) {
-        return ResponseEntity.ok(todoService.getTodos(status, page, limit));
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String search) {
+        return ResponseEntity.ok(todoService.getTodos(status, page, limit, search));
     }
 
     @PostMapping
