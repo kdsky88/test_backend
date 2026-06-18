@@ -18,6 +18,7 @@ class UpdateTodoRequestTest {
                 """
                 {
                   "description": null,
+                  "note": "상세 메모",
                   "completed": true,
                   "priority": "HIGH"
                 }
@@ -28,6 +29,8 @@ class UpdateTodoRequestTest {
         assertThat(request.isTitlePresent()).isFalse();
         assertThat(request.isDescriptionPresent()).isTrue();
         assertThat(request.getDescription()).isNull();
+        assertThat(request.isNotePresent()).isTrue();
+        assertThat(request.getNote()).isEqualTo("상세 메모");
         assertThat(request.isCompletedPresent()).isTrue();
         assertThat(request.getCompleted()).isTrue();
         assertThat(request.isPriorityPresent()).isTrue();

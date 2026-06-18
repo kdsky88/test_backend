@@ -49,6 +49,7 @@ public class TodoService {
         Map<String, String> fields = new LinkedHashMap<>();
         validateTitle(request.getTitle(), fields);
         validateDescription(request.getDescription(), fields);
+        validateNote(request.getNote(), fields);
         TodoPriority priority = resolveCreatePriority(request, fields);
         if (!fields.isEmpty()) {
             if (fields.containsKey("priority")) {
@@ -60,6 +61,7 @@ public class TodoService {
         Todo todo = new Todo(
                 request.getTitle().strip(),
                 request.getDescription(),
+                request.getNote(),
                 request.getDueAt(),
                 priority
         );
@@ -76,6 +78,9 @@ public class TodoService {
         }
         if (request.isDescriptionPresent()) {
             todo.updateDescription(request.getDescription());
+        }
+        if (request.isNotePresent()) {
+            todo.updateNote(request.getNote());
         }
         if (request.isDueAtPresent()) {
             todo.updateDueAt(request.getDueAt());
@@ -158,6 +163,9 @@ public class TodoService {
         if (request.isDescriptionPresent()) {
             validateDescription(request.getDescription(), fields);
         }
+        if (request.isNotePresent()) {
+            validateNote(request.getNote(), fields);
+        }
         if (request.isCompletedPresent() && request.getCompleted() == null) {
             fields.put("completed", "completed는 null일 수 없습니다.");
         }
@@ -224,6 +232,12 @@ public class TodoService {
     private void validateDescription(String description, Map<String, String> fields) {
         if (description != null && description.length() > 1000) {
             fields.put("description", "description은 1000자를 초과할 수 없습니다.");
+        }
+    }
+
+    private void validateNote(String note, Map<String, String> fields) {
+        if (note != null && note.length() > 1000) {
+            fields.put("note", "note는 1000자를 초과할 수 없습니다.");
         }
     }
 

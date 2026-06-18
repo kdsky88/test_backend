@@ -16,6 +16,9 @@ public class UpdateTodoRequest {
     private boolean descriptionPresent;
     private String description;
 
+    private boolean notePresent;
+    private String note;
+
     private boolean dueAtPresent;
     private OffsetDateTime dueAt;
 
@@ -37,6 +40,12 @@ public class UpdateTodoRequest {
         this.description = description;
     }
 
+    @JsonSetter("note")
+    public void setNote(String note) {
+        this.notePresent = true;
+        this.note = note;
+    }
+
     @JsonSetter("dueAt")
     public void setDueAt(OffsetDateTime dueAt) {
         this.dueAtPresent = true;
@@ -56,6 +65,6 @@ public class UpdateTodoRequest {
     }
 
     public boolean hasAnyField() {
-        return titlePresent || descriptionPresent || dueAtPresent || completedPresent || priorityPresent;
+        return titlePresent || descriptionPresent || notePresent || dueAtPresent || completedPresent || priorityPresent;
     }
 }
