@@ -128,6 +128,18 @@ class TodoServiceTest {
     }
 
     @Test
+    void createsTodoWithOptionalNote() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "메모 있는 할 일");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "note", "상세 설명입니다.");
+        given(todoRepository.save(any(Todo.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        TodoResponse response = todoService.createTodo(request).data();
+
+        assertThat(response.note()).isEqualTo("상세 설명입니다.");
+    }
+
+    @Test
     void rejectsInvalidOrNullPriorityOnCreate() {
         CreateTodoRequest invalid = new CreateTodoRequest();
         org.springframework.test.util.ReflectionTestUtils.setField(invalid, "title", "할 일");
@@ -186,20 +198,51 @@ class TodoServiceTest {
     }
 
     @Test
+    void rejectsNoteLongerThanOneThousandCharacters() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "할 일");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "note", "a".repeat(1001));
+
+        assertThatThrownBy(() -> todoService.createTodo(request))
+                .isInstanceOfSatisfying(TodoApiException.class, exception -> {
+                    assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(exception.getFields()).containsKey("note");
+                });
+
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
     void distinguishesAbsentAndNullFieldsWhenUpdating() {
         OffsetDateTime dueAt = OffsetDateTime.parse("2026-06-10T09:00:00+09:00");
-        Todo todo = new Todo("기존 제목", "기존 설명", dueAt);
+        Todo todo = new Todo("기존 제목", "기존 설명", "기존 메모", dueAt, TodoPriority.MEDIUM);
         given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
         given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         UpdateTodoRequest request = new UpdateTodoRequest();
         request.setDescription(null);
+        request.setNote(null);
         request.setDueAt(null);
 
         TodoResponse response = todoService.updateTodo(TODO_ID, request).data();
 
         assertThat(response.title()).isEqualTo("기존 제목");
         assertThat(response.description()).isNull();
+        assertThat(response.note()).isNull();
         assertThat(response.dueAt()).isNull();
+    }
+
+    @Test
+    void updatesOnlyNote() {
+        Todo todo = new Todo("기존 제목", null, "기존 메모", null, TodoPriority.MEDIUM);
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
+        UpdateTodoRequest request = new UpdateTodoRequest();
+        request.setNote("변경된 메모");
+
+        TodoResponse response = todoService.updateTodo(TODO_ID, request).data();
+
+        assertThat(response.title()).isEqualTo("기존 제목");
+        assertThat(response.note()).isEqualTo("변경된 메모");
     }
 
     @Test

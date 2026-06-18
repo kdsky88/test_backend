@@ -43,12 +43,14 @@ class TodoApiIntegrationTest {
                         .content("""
                                 {
                                   "title":"통합 테스트",
+                                  "note":"통합 테스트 메모",
                                   "priority":"HIGH",
                                   "dueAt":"2026-06-10T09:00:00+09:00"
                                 }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.id").isString())
+                .andExpect(jsonPath("$.data.note").value("통합 테스트 메모"))
                 .andExpect(jsonPath("$.data.completed").value(false))
                 .andExpect(jsonPath("$.data.priority").value("HIGH"))
                 .andReturn();
@@ -59,16 +61,18 @@ class TodoApiIntegrationTest {
         mockMvc.perform(patch("/todos/{id}", id)
                         .contentType("application/json")
                         .content("""
-                                {"completed":true}
+                                {"completed":true,"note":"완료 메모"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(id))
+                .andExpect(jsonPath("$.data.note").value("완료 메모"))
                 .andExpect(jsonPath("$.data.completed").value(true))
                 .andExpect(jsonPath("$.data.completedAt").isString());
 
         mockMvc.perform(get("/todos").param("status", "completed"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value(id))
+                .andExpect(jsonPath("$.data[0].note").value("완료 메모"))
                 .andExpect(jsonPath("$.meta.total").value(1));
 
         mockMvc.perform(delete("/todos/{id}", id))
@@ -108,6 +112,18 @@ class TodoApiIntegrationTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_PRIORITY"));
+    }
+
+    @Test
+    void rejectsNoteLongerThanLimit() throws Exception {
+        mockMvc.perform(post("/todos")
+                        .contentType("application/json")
+                        .content("""
+                                {"title":"메모 길이 초과","note":"%s"}
+                                """.formatted("a".repeat(1001))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.error.fields.note").exists());
     }
 
     private void createTodo(String title, String priority) throws Exception {

@@ -34,6 +34,9 @@ public class Todo {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(length = 1000)
+    private String note;
+
     @Column(nullable = false)
     private boolean completed;
 
@@ -58,9 +61,14 @@ public class Todo {
     }
 
     public Todo(String title, String description, OffsetDateTime dueAt, TodoPriority priority) {
+        this(title, description, null, dueAt, priority);
+    }
+
+    public Todo(String title, String description, String note, OffsetDateTime dueAt, TodoPriority priority) {
         this.id = UUID.randomUUID().toString();
         this.title = title;
         this.description = description;
+        this.note = note;
         this.dueAt = dueAt;
         this.priority = priority;
     }
@@ -71,6 +79,10 @@ public class Todo {
 
     public void updateDescription(String description) {
         this.description = description;
+    }
+
+    public void updateNote(String note) {
+        this.note = note;
     }
 
     public void updateDueAt(OffsetDateTime dueAt) {
