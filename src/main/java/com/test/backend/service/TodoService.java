@@ -32,16 +32,42 @@ public class TodoService {
     private final TodoRepository todoRepository;
 
     @Transactional(readOnly = true)
-    public TodoListResponse getTodos(String status, int page, int limit) {
+    public TodoListResponse getTodos(String status, int page, int limit, String assignee) {
         TodoStatus todoStatus = validateListRequest(status, page, limit);
+        String normalizedAssignee = assignee == null ? null : assignee.strip();
+        if (normalizedAssignee != null && normalizedAssignee.isBlank()) {
+            normalizedAssignee = null;
+        }
         PageRequest pageable = PageRequest.of(page - 1, limit);
-        Page<Todo> todoPage = switch (todoStatus) {
-            case ALL -> todoRepository.findAllByPriorityOrder(pageable);
-            case ACTIVE -> todoRepository.findByCompletedOrderByPriority(false, pageable);
-            case COMPLETED -> todoRepository.findByCompletedOrderByPriority(true, pageable);
-        };
+        Page<Todo> todoPage;
+        if (normalizedAssignee == null) {
+            todoPage = switch (todoStatus) {
+                case ALL -> todoRepository.findAllByPriorityOrder(pageable);
+                case ACTIVE -> todoRepository.findByCompletedOrderByPriority(false, pageable);
+                case COMPLETED -> todoRepository.findByCompletedOrderByPriority(true, pageable);
+            };
+        } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
+            Boolean completed = switch (todoStatus) {
+                case ALL -> null;
+                case ACTIVE -> false;
+                case COMPLETED -> true;
+            };
+            todoPage = todoRepository.findByUnassignedAndCompleted(completed, pageable);
+        } else {
+            Boolean completed = switch (todoStatus) {
+                case ALL -> null;
+                case ACTIVE -> false;
+                case COMPLETED -> true;
+            };
+            todoPage = todoRepository.findByAssigneeAndCompleted(completed, normalizedAssignee, pageable);
+        }
         Page<TodoResponse> todos = todoPage.map(TodoResponse::new);
         return TodoListResponse.from(todos, page);
+    }
+
+    @Transactional(readOnly = true)
+    public ApiResponse<List<String>> getAssignees() {
+        return new ApiResponse<>(todoRepository.findDistinctAssignees());
     }
 
     @Transactional
@@ -51,6 +77,7 @@ public class TodoService {
         validateDescription(request.getDescription(), fields);
         validateNote(request.getNote(), fields);
         TodoPriority priority = resolveCreatePriority(request, fields);
+        String assignee = resolveAssignee(request.getAssignee(), fields);
         if (!fields.isEmpty()) {
             if (fields.containsKey("priority")) {
                 throw invalidPriority();
@@ -63,7 +90,8 @@ public class TodoService {
                 request.getDescription(),
                 request.getNote(),
                 request.getDueAt(),
-                priority
+                priority,
+                assignee
         );
         return new ApiResponse<>(new TodoResponse(todoRepository.save(todo)));
     }
@@ -91,6 +119,9 @@ public class TodoService {
         if (request.isPriorityPresent()) {
             todo.updatePriority(parsePriority(request.getPriority()));
         }
+        if (request.isAssigneePresent()) {
+            todo.updateAssignee(normalizeAssigneeForUpdate(request.getAssignee()));
+        }
         // saveAndFlush로 @LastModifiedDate가 DB에 반영된 값을 응답에 포함
         return new ApiResponse<>(new TodoResponse(todoRepository.saveAndFlush(todo)));
     }
@@ -100,6 +131,7 @@ public class TodoService {
         todoRepository.delete(findTodo(id));
     }
 
+    private static final String UNASSIGNED_TOKEN = "@unassigned";
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Transactional(readOnly = true)
@@ -172,6 +204,9 @@ public class TodoService {
         if (request.isPriorityPresent()) {
             validatePriority(request.getPriority(), fields);
         }
+        if (request.isAssigneePresent() && request.getAssignee() != null) {
+            validateAssigneeField(request.getAssignee(), fields);
+        }
         if (!fields.isEmpty()) {
             if (fields.containsKey("priority")) {
                 throw invalidPriority();
@@ -239,6 +274,40 @@ public class TodoService {
         if (note != null && note.length() > 1000) {
             fields.put("note", "note는 1000자를 초과할 수 없습니다.");
         }
+    }
+
+    private String resolveAssignee(String assignee, Map<String, String> fields) {
+        if (assignee == null) {
+            return null;
+        }
+        String trimmed = assignee.strip();
+        if (trimmed.isBlank()) {
+            return null;
+        }
+        validateAssigneeField(trimmed, fields);
+        return fields.containsKey("assignee") ? null : trimmed;
+    }
+
+    private void validateAssigneeField(String assignee, Map<String, String> fields) {
+        String trimmed = assignee == null ? null : assignee.strip();
+        if (trimmed == null || trimmed.isBlank()) {
+            return;
+        }
+        if (UNASSIGNED_TOKEN.equals(trimmed)) {
+            fields.put("assignee", "담당자로 예약어 '@unassigned'를 사용할 수 없습니다.");
+            return;
+        }
+        if (trimmed.length() > 50) {
+            fields.put("assignee", "담당자는 50자를 초과할 수 없습니다.");
+        }
+    }
+
+    private String normalizeAssigneeForUpdate(String assignee) {
+        if (assignee == null) {
+            return null;
+        }
+        String trimmed = assignee.strip();
+        return trimmed.isBlank() ? null : trimmed;
     }
 
     private TodoApiException validationError(Map<String, String> fields) {

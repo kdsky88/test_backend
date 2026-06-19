@@ -6,6 +6,7 @@ import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,7 +19,9 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "todos")
+@Table(name = "todos", indexes = {
+    @Index(name = "idx_todos_assignee", columnList = "assignee")
+})
 @Getter
 @NoArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
@@ -44,6 +47,9 @@ public class Todo {
     @Column(nullable = false, length = 10, columnDefinition = "VARCHAR(10) DEFAULT 'MEDIUM'")
     private TodoPriority priority = TodoPriority.MEDIUM;
 
+    @Column(length = 50)
+    private String assignee;
+
     private OffsetDateTime dueAt;
 
     private Instant completedAt;
@@ -65,12 +71,17 @@ public class Todo {
     }
 
     public Todo(String title, String description, String note, OffsetDateTime dueAt, TodoPriority priority) {
+        this(title, description, note, dueAt, priority, null);
+    }
+
+    public Todo(String title, String description, String note, OffsetDateTime dueAt, TodoPriority priority, String assignee) {
         this.id = UUID.randomUUID().toString();
         this.title = title;
         this.description = description;
         this.note = note;
         this.dueAt = dueAt;
         this.priority = priority;
+        this.assignee = assignee;
     }
 
     public void updateTitle(String title) {
@@ -91,6 +102,10 @@ public class Todo {
 
     public void updatePriority(TodoPriority priority) {
         this.priority = priority;
+    }
+
+    public void updateAssignee(String assignee) {
+        this.assignee = assignee;
     }
 
     public void updateCompleted(boolean completed, Instant changedAt) {

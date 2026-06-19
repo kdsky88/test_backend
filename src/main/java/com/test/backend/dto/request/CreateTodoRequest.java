@@ -14,6 +14,7 @@ public class CreateTodoRequest {
     private String description;
     private String note;
     private OffsetDateTime dueAt;
+    private String assignee;
 
     private boolean priorityPresent;
     private String priority;

@@ -16,7 +16,8 @@ public record TodoResponse(
         OffsetDateTime dueAt,
         Instant completedAt,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String assignee
 ) {
     public TodoResponse(Todo todo) {
         this(
@@ -29,7 +30,8 @@ public record TodoResponse(
                 todo.getDueAt(),
                 todo.getCompletedAt(),
                 todo.getCreatedAt(),
-                todo.getUpdatedAt()
+                todo.getUpdatedAt(),
+                todo.getAssignee()
         );
     }
 }

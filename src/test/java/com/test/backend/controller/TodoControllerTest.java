@@ -44,7 +44,7 @@ class TodoControllerTest {
 
     @Test
     void returnsFilteredListWithDataAndMeta() throws Exception {
-        given(todoService.getTodos("active", 2, 10))
+        given(todoService.getTodos("active", 2, 10, null))
                 .willReturn(new TodoListResponse(
                         List.of(),
                         new TodoListResponse.Meta(2, 10, 0, 0)
@@ -59,7 +59,7 @@ class TodoControllerTest {
                 .andExpect(jsonPath("$.meta.page").value(2))
                 .andExpect(jsonPath("$.meta.limit").value(10));
 
-        verify(todoService).getTodos("active", 2, 10);
+        verify(todoService).getTodos("active", 2, 10, null);
     }
 
     @Test
@@ -71,6 +71,7 @@ class TodoControllerTest {
                 null,
                 false,
                 TodoPriority.MEDIUM,
+                null,
                 null,
                 null,
                 null,
