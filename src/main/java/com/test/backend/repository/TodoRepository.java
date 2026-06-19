@@ -42,6 +42,54 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
             Pageable pageable
     );
 
+    @Query(
+            value = """
+                    SELECT t FROM Todo t
+                    WHERE (:completed IS NULL OR t.completed = :completed)
+                    AND t.assignee = :assignee
+                    ORDER BY CASE t.priority
+                        WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                        WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                        WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                    END ASC, t.createdAt DESC, t.id DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(t) FROM Todo t
+                    WHERE (:completed IS NULL OR t.completed = :completed)
+                    AND t.assignee = :assignee
+                    """
+    )
+    Page<Todo> findByAssigneeAndCompleted(
+            @Param("completed") Boolean completed,
+            @Param("assignee") String assignee,
+            Pageable pageable
+    );
+
+    @Query(
+            value = """
+                    SELECT t FROM Todo t
+                    WHERE (:completed IS NULL OR t.completed = :completed)
+                    AND (t.assignee IS NULL OR t.assignee = '')
+                    ORDER BY CASE t.priority
+                        WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                        WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                        WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                    END ASC, t.createdAt DESC, t.id DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(t) FROM Todo t
+                    WHERE (:completed IS NULL OR t.completed = :completed)
+                    AND (t.assignee IS NULL OR t.assignee = '')
+                    """
+    )
+    Page<Todo> findByUnassignedAndCompleted(
+            @Param("completed") Boolean completed,
+            Pageable pageable
+    );
+
+    @Query("SELECT DISTINCT t.assignee FROM Todo t WHERE t.assignee IS NOT NULL AND t.assignee <> '' ORDER BY t.assignee")
+    List<String> findDistinctAssignees();
+
     @Query("SELECT t FROM Todo t WHERE t.dueAt >= :start AND t.dueAt < :end ORDER BY t.dueAt ASC, t.id ASC")
     List<Todo> findByDueAtBetween(@Param("start") OffsetDateTime start, @Param("end") OffsetDateTime end);
 }

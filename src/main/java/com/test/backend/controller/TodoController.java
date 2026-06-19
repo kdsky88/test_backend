@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/todos")
 @RequiredArgsConstructor
@@ -34,12 +36,18 @@ public class TodoController {
         return ResponseEntity.ok(todoService.getCalendar(year, month));
     }
 
+    @GetMapping("/assignees")
+    public ResponseEntity<ApiResponse<List<String>>> getAssignees() {
+        return ResponseEntity.ok(todoService.getAssignees());
+    }
+
     @GetMapping
     public ResponseEntity<TodoListResponse> getTodos(
             @RequestParam(defaultValue = "all") String status,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int limit) {
-        return ResponseEntity.ok(todoService.getTodos(status, page, limit));
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String assignee) {
+        return ResponseEntity.ok(todoService.getTodos(status, page, limit, assignee));
     }
 
     @PostMapping

@@ -55,7 +55,7 @@ class TodoServiceTest {
         given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), any()))
                 .willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
 
-        TodoListResponse response = todoService.getTodos("active", 2, 30);
+        TodoListResponse response = todoService.getTodos("active", 2, 30, null);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(todoRepository).findByCompletedOrderByPriority(
@@ -75,8 +75,8 @@ class TodoServiceTest {
         given(todoRepository.findAllByPriorityOrder(any(Pageable.class))).willReturn(Page.empty());
         given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), any())).willReturn(Page.empty());
 
-        todoService.getTodos("all", 1, 20);
-        todoService.getTodos("completed", 1, 20);
+        todoService.getTodos("all", 1, 20, null);
+        todoService.getTodos("completed", 1, 20, null);
 
         verify(todoRepository).findAllByPriorityOrder(any(Pageable.class));
         verify(todoRepository).findByCompletedOrderByPriority(true, PageRequest.of(0, 20));
@@ -84,7 +84,7 @@ class TodoServiceTest {
 
     @Test
     void rejectsInvalidStatusWithInvalidFilter() {
-        assertThatThrownBy(() -> todoService.getTodos("unknown", 1, 20))
+        assertThatThrownBy(() -> todoService.getTodos("unknown", 1, 20, null))
                 .isInstanceOfSatisfying(TodoApiException.class, exception ->
                     assertThat(exception.getCode()).isEqualTo("INVALID_FILTER"));
         verifyNoInteractions(todoRepository);
@@ -92,7 +92,7 @@ class TodoServiceTest {
 
     @Test
     void rejectsInvalidPageAndLimitWithValidationError() {
-        assertThatThrownBy(() -> todoService.getTodos("all", 0, 101))
+        assertThatThrownBy(() -> todoService.getTodos("all", 0, 101, null))
                 .isInstanceOfSatisfying(TodoApiException.class, exception -> {
                     assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
                     assertThat(exception.getFields()).containsKeys("page", "limit");
@@ -304,6 +304,142 @@ class TodoServiceTest {
         todoService.deleteTodo(TODO_ID);
 
         verify(todoRepository).delete(todo);
+    }
+
+    @Test
+    void createsTodoWithAssignee() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "담당자 있는 할 일");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "assignee", " 철수 ");
+        given(todoRepository.save(any(Todo.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        TodoResponse response = todoService.createTodo(request).data();
+
+        assertThat(response.assignee()).isEqualTo("철수");
+    }
+
+    @Test
+    void createsTodoWithBlankAssigneeStoresNull() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "담당자 없는 할 일");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "assignee", "   ");
+        given(todoRepository.save(any(Todo.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        TodoResponse response = todoService.createTodo(request).data();
+
+        assertThat(response.assignee()).isNull();
+    }
+
+    @Test
+    void rejectsAssigneeLongerThan50Chars() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "할 일");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "assignee", "a".repeat(51));
+
+        assertThatThrownBy(() -> todoService.createTodo(request))
+                .isInstanceOfSatisfying(TodoApiException.class, exception -> {
+                    assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(exception.getFields()).containsKey("assignee");
+                });
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
+    void rejectsReservedTokenAsAssigneeName() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "할 일");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "assignee", "@unassigned");
+
+        assertThatThrownBy(() -> todoService.createTodo(request))
+                .isInstanceOfSatisfying(TodoApiException.class, exception -> {
+                    assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(exception.getFields()).containsKey("assignee");
+                });
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
+    void filtersByAssignee() {
+        Todo todo = new Todo("할 일", null, null, null, TodoPriority.MEDIUM, "철수");
+        PageRequest requestedPage = PageRequest.of(0, 20);
+        given(todoRepository.findByAssigneeAndCompleted(
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq("철수"),
+                any(Pageable.class)
+        )).willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
+
+        TodoListResponse response = todoService.getTodos("all", 1, 20, "철수");
+
+        verify(todoRepository).findByAssigneeAndCompleted(
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq("철수"),
+                any(Pageable.class)
+        );
+        assertThat(response.meta().total()).isEqualTo(1);
+    }
+
+    @Test
+    void filtersByUnassigned() {
+        PageRequest requestedPage = PageRequest.of(0, 20);
+        given(todoRepository.findByUnassignedAndCompleted(
+                org.mockito.ArgumentMatchers.isNull(),
+                any(Pageable.class)
+        )).willReturn(new PageImpl<>(List.of(), requestedPage, 0));
+
+        todoService.getTodos("all", 1, 20, "@unassigned");
+
+        verify(todoRepository).findByUnassignedAndCompleted(
+                org.mockito.ArgumentMatchers.isNull(),
+                any(Pageable.class)
+        );
+    }
+
+    @Test
+    void updatesAssignee() {
+        Todo todo = new Todo("할 일", null, null, null, TodoPriority.MEDIUM, "철수");
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
+        UpdateTodoRequest request = new UpdateTodoRequest();
+        request.setAssignee("영희");
+
+        TodoResponse response = todoService.updateTodo(TODO_ID, request).data();
+
+        assertThat(response.assignee()).isEqualTo("영희");
+    }
+
+    @Test
+    void clearsAssignee() {
+        Todo todo = new Todo("할 일", null, null, null, TodoPriority.MEDIUM, "철수");
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
+        UpdateTodoRequest request = new UpdateTodoRequest();
+        request.setAssignee(null);
+
+        TodoResponse response = todoService.updateTodo(TODO_ID, request).data();
+
+        assertThat(response.assignee()).isNull();
+    }
+
+    @Test
+    void keepsAssigneeWhenNotInUpdateRequest() {
+        Todo todo = new Todo("할 일", null, null, null, TodoPriority.MEDIUM, "철수");
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
+        UpdateTodoRequest request = new UpdateTodoRequest();
+        request.setTitle("제목 변경");
+
+        TodoResponse response = todoService.updateTodo(TODO_ID, request).data();
+
+        assertThat(response.assignee()).isEqualTo("철수");
+    }
+
+    @Test
+    void getsAssignees() {
+        given(todoRepository.findDistinctAssignees()).willReturn(List.of("영희", "철수"));
+
+        ApiResponse<List<String>> response = todoService.getAssignees();
+
+        assertThat(response.data()).containsExactly("영희", "철수");
     }
 
     @Test
