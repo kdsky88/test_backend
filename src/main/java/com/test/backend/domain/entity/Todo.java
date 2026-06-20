@@ -1,21 +1,29 @@
 package com.test.backend.domain.entity;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -54,6 +62,16 @@ public class Todo {
 
     private Instant completedAt;
 
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(
+        name = "todo_tags",
+        joinColumns = @JoinColumn(name = "todo_id"),
+        indexes = @Index(name = "idx_todo_tags_tag", columnList = "tag")
+    )
+    @Column(name = "tag", length = 20, nullable = false)
+    @BatchSize(size = 50)
+    private List<String> tags = new ArrayList<>();
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -82,6 +100,24 @@ public class Todo {
         this.dueAt = dueAt;
         this.priority = priority;
         this.assignee = assignee;
+    }
+
+    public List<String> getTags() {
+        return Collections.unmodifiableList(tags);
+    }
+
+    public boolean hasTag(String tag) {
+        return tags.contains(tag);
+    }
+
+    public void addTag(String tag) {
+        if (!tags.contains(tag)) {
+            tags.add(tag);
+        }
+    }
+
+    public void removeTag(String tag) {
+        tags.remove(tag);
     }
 
     public void updateTitle(String title) {

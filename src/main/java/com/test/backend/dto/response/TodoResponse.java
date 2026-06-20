@@ -5,6 +5,8 @@ import com.test.backend.domain.entity.TodoPriority;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public record TodoResponse(
         String id,
@@ -17,7 +19,8 @@ public record TodoResponse(
         Instant completedAt,
         Instant createdAt,
         Instant updatedAt,
-        String assignee
+        String assignee,
+        List<String> tags
 ) {
     public TodoResponse(Todo todo) {
         this(
@@ -31,7 +34,8 @@ public record TodoResponse(
                 todo.getCompletedAt(),
                 todo.getCreatedAt(),
                 todo.getUpdatedAt(),
-                todo.getAssignee()
+                todo.getAssignee(),
+                todo.getTags().stream().sorted().collect(Collectors.toList())
         );
     }
 }

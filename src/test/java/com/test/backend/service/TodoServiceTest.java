@@ -29,7 +29,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -55,11 +58,11 @@ class TodoServiceTest {
         given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), any()))
                 .willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
 
-        TodoListResponse response = todoService.getTodos("active", 2, 30, null);
+        TodoListResponse response = todoService.getTodos("active", 2, 30, null, null);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(todoRepository).findByCompletedOrderByPriority(
-                org.mockito.ArgumentMatchers.eq(false),
+                eq(false),
                 pageableCaptor.capture()
         );
         Pageable pageable = pageableCaptor.getValue();
@@ -75,8 +78,8 @@ class TodoServiceTest {
         given(todoRepository.findAllByPriorityOrder(any(Pageable.class))).willReturn(Page.empty());
         given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), any())).willReturn(Page.empty());
 
-        todoService.getTodos("all", 1, 20, null);
-        todoService.getTodos("completed", 1, 20, null);
+        todoService.getTodos("all", 1, 20, null, null);
+        todoService.getTodos("completed", 1, 20, null, null);
 
         verify(todoRepository).findAllByPriorityOrder(any(Pageable.class));
         verify(todoRepository).findByCompletedOrderByPriority(true, PageRequest.of(0, 20));
@@ -84,7 +87,7 @@ class TodoServiceTest {
 
     @Test
     void rejectsInvalidStatusWithInvalidFilter() {
-        assertThatThrownBy(() -> todoService.getTodos("unknown", 1, 20, null))
+        assertThatThrownBy(() -> todoService.getTodos("unknown", 1, 20, null, null))
                 .isInstanceOfSatisfying(TodoApiException.class, exception ->
                     assertThat(exception.getCode()).isEqualTo("INVALID_FILTER"));
         verifyNoInteractions(todoRepository);
@@ -92,7 +95,7 @@ class TodoServiceTest {
 
     @Test
     void rejectsInvalidPageAndLimitWithValidationError() {
-        assertThatThrownBy(() -> todoService.getTodos("all", 0, 101, null))
+        assertThatThrownBy(() -> todoService.getTodos("all", 0, 101, null, null))
                 .isInstanceOfSatisfying(TodoApiException.class, exception -> {
                     assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
                     assertThat(exception.getFields()).containsKeys("page", "limit");
@@ -113,6 +116,7 @@ class TodoServiceTest {
         );
         assertThat(response.data().title()).isEqualTo("할 일");
         assertThat(response.data().priority()).isEqualTo(TodoPriority.MEDIUM);
+        assertThat(response.data().tags()).isEmpty();
     }
 
     @Test
@@ -363,16 +367,16 @@ class TodoServiceTest {
         Todo todo = new Todo("할 일", null, null, null, TodoPriority.MEDIUM, "철수");
         PageRequest requestedPage = PageRequest.of(0, 20);
         given(todoRepository.findByAssigneeAndCompleted(
-                org.mockito.ArgumentMatchers.isNull(),
-                org.mockito.ArgumentMatchers.eq("철수"),
+                isNull(),
+                eq("철수"),
                 any(Pageable.class)
         )).willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
 
-        TodoListResponse response = todoService.getTodos("all", 1, 20, "철수");
+        TodoListResponse response = todoService.getTodos("all", 1, 20, "철수", null);
 
         verify(todoRepository).findByAssigneeAndCompleted(
-                org.mockito.ArgumentMatchers.isNull(),
-                org.mockito.ArgumentMatchers.eq("철수"),
+                isNull(),
+                eq("철수"),
                 any(Pageable.class)
         );
         assertThat(response.meta().total()).isEqualTo(1);
@@ -382,14 +386,14 @@ class TodoServiceTest {
     void filtersByUnassigned() {
         PageRequest requestedPage = PageRequest.of(0, 20);
         given(todoRepository.findByUnassignedAndCompleted(
-                org.mockito.ArgumentMatchers.isNull(),
+                isNull(),
                 any(Pageable.class)
         )).willReturn(new PageImpl<>(List.of(), requestedPage, 0));
 
-        todoService.getTodos("all", 1, 20, "@unassigned");
+        todoService.getTodos("all", 1, 20, "@unassigned", null);
 
         verify(todoRepository).findByUnassignedAndCompleted(
-                org.mockito.ArgumentMatchers.isNull(),
+                isNull(),
                 any(Pageable.class)
         );
     }
@@ -461,5 +465,181 @@ class TodoServiceTest {
             .isInstanceOfSatisfying(TodoApiException.class,
                 ex -> assertThat(ex.getCode()).isEqualTo("VALIDATION_ERROR"));
         verifyNoInteractions(todoRepository);
+    }
+
+    // ── Tag tests ─────────────────────────────────────────────────────────────
+
+    @Test
+    void addsTagToTodo() {
+        Todo todo = new Todo("할 일", null, null);
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
+
+        ApiResponse<TodoResponse> response = todoService.addTag(TODO_ID, "업무");
+
+        assertThat(response.data().tags()).containsExactly("업무");
+    }
+
+    @Test
+    void addTagIsIdempotentWhenAlreadyPresent() {
+        Todo todo = new Todo("할 일", null, null);
+        todo.addTag("업무");
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+
+        ApiResponse<TodoResponse> response = todoService.addTag(TODO_ID, "업무");
+
+        assertThat(response.data().tags()).containsExactly("업무");
+        verify(todoRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void addTagRejectsBlankValue() {
+        assertThatThrownBy(() -> todoService.addTag(TODO_ID, "   "))
+                .isInstanceOfSatisfying(TodoApiException.class, ex -> {
+                    assertThat(ex.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(ex.getFields()).containsKey("tag");
+                });
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
+    void addTagRejectsTooLongValue() {
+        assertThatThrownBy(() -> todoService.addTag(TODO_ID, "a".repeat(21)))
+                .isInstanceOfSatisfying(TodoApiException.class, ex -> {
+                    assertThat(ex.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(ex.getFields()).containsKey("tag");
+                });
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
+    void addTagReturnsNotFoundForMissingTodo() {
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> todoService.addTag(TODO_ID, "업무"))
+                .isInstanceOfSatisfying(TodoApiException.class, ex ->
+                        assertThat(ex.getCode()).isEqualTo("TODO_NOT_FOUND"));
+    }
+
+    @Test
+    void addTagExceedsLimit() {
+        Todo todo = new Todo("할 일", null, null);
+        for (int i = 1; i <= 10; i++) {
+            todo.addTag("태그" + i);
+        }
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+
+        assertThatThrownBy(() -> todoService.addTag(TODO_ID, "초과태그"))
+                .isInstanceOfSatisfying(TodoApiException.class, ex ->
+                        assertThat(ex.getCode()).isEqualTo("TAG_LIMIT_EXCEEDED"));
+    }
+
+    @Test
+    void removesTagFromTodo() {
+        Todo todo = new Todo("할 일", null, null);
+        todo.addTag("업무");
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
+
+        ApiResponse<TodoResponse> response = todoService.removeTag(TODO_ID, "업무");
+
+        assertThat(response.data().tags()).isEmpty();
+    }
+
+    @Test
+    void removeTagIsIdempotentWhenNotPresent() {
+        Todo todo = new Todo("할 일", null, null);
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
+
+        ApiResponse<TodoResponse> response = todoService.removeTag(TODO_ID, "없는태그");
+
+        assertThat(response.data().tags()).isEmpty();
+    }
+
+    @Test
+    void removeTagRejectsBlankValue() {
+        assertThatThrownBy(() -> todoService.removeTag(TODO_ID, "   "))
+                .isInstanceOfSatisfying(TodoApiException.class, ex -> {
+                    assertThat(ex.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(ex.getFields()).containsKey("tag");
+                });
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
+    void removeTagReturnsNotFoundForMissingTodo() {
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> todoService.removeTag(TODO_ID, "업무"))
+                .isInstanceOfSatisfying(TodoApiException.class, ex ->
+                        assertThat(ex.getCode()).isEqualTo("TODO_NOT_FOUND"));
+    }
+
+    @Test
+    void getTagsReturnsDistinctSortedList() {
+        given(todoRepository.findDistinctTags()).willReturn(List.of("개인", "긴급", "업무"));
+
+        ApiResponse<List<String>> response = todoService.getTags();
+
+        assertThat(response.data()).containsExactly("개인", "긴급", "업무");
+    }
+
+    @Test
+    void createsTodoWithTags() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "태그 있는 할 일");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "tags", List.of("업무", "긴급"));
+        given(todoRepository.save(any(Todo.class))).willAnswer(inv -> inv.getArgument(0));
+
+        TodoResponse response = todoService.createTodo(request).data();
+
+        assertThat(response.tags()).containsExactlyInAnyOrder("업무", "긴급");
+    }
+
+    @Test
+    void createsTodoRejectsTooLongTag() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "할 일");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "tags", List.of("a".repeat(21)));
+
+        assertThatThrownBy(() -> todoService.createTodo(request))
+                .isInstanceOfSatisfying(TodoApiException.class, ex -> {
+                    assertThat(ex.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(ex.getFields()).containsKey("tags");
+                });
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
+    void filtersTodosByTag() {
+        Todo todo = new Todo("할 일", null, null);
+        todo.addTag("업무");
+        PageRequest requestedPage = PageRequest.of(0, 20);
+        given(todoRepository.findByTagAndCompleted(
+                eq("업무"),
+                isNull(),
+                any(Pageable.class)
+        )).willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
+
+        TodoListResponse response = todoService.getTodos("all", 1, 20, null, "업무");
+
+        verify(todoRepository).findByTagAndCompleted(eq("업무"), isNull(), any(Pageable.class));
+        assertThat(response.meta().total()).isEqualTo(1);
+        assertThat(response.data().get(0).tags()).containsExactly("업무");
+    }
+
+    @Test
+    void filtersTodosByTagAndStatus() {
+        PageRequest requestedPage = PageRequest.of(0, 20);
+        given(todoRepository.findByTagAndCompleted(
+                eq("긴급"),
+                eq(false),
+                any(Pageable.class)
+        )).willReturn(new PageImpl<>(List.of(), requestedPage, 0));
+
+        todoService.getTodos("active", 1, 20, null, "긴급");
+
+        verify(todoRepository).findByTagAndCompleted(eq("긴급"), eq(false), any(Pageable.class));
     }
 }
