@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Getter
 @NoArgsConstructor
@@ -15,6 +16,7 @@ public class CreateTodoRequest {
     private String note;
     private OffsetDateTime dueAt;
     private String assignee;
+    private List<String> tags;
 
     private boolean priorityPresent;
     private String priority;

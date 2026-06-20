@@ -1,5 +1,6 @@
 package com.test.backend.controller;
 
+import com.test.backend.dto.request.AddTagRequest;
 import com.test.backend.dto.request.CreateTodoRequest;
 import com.test.backend.dto.request.UpdateTodoRequest;
 import com.test.backend.dto.response.ApiResponse;
@@ -41,13 +42,19 @@ public class TodoController {
         return ResponseEntity.ok(todoService.getAssignees());
     }
 
+    @GetMapping("/tags")
+    public ResponseEntity<ApiResponse<List<String>>> getTags() {
+        return ResponseEntity.ok(todoService.getTags());
+    }
+
     @GetMapping
     public ResponseEntity<TodoListResponse> getTodos(
             @RequestParam(defaultValue = "all") String status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit,
-            @RequestParam(required = false) String assignee) {
-        return ResponseEntity.ok(todoService.getTodos(status, page, limit, assignee));
+            @RequestParam(required = false) String assignee,
+            @RequestParam(required = false) String tag) {
+        return ResponseEntity.ok(todoService.getTodos(status, page, limit, assignee, tag));
     }
 
     @PostMapping
@@ -67,5 +74,19 @@ public class TodoController {
     public ResponseEntity<Void> deleteTodo(@PathVariable String id) {
         todoService.deleteTodo(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/tags")
+    public ResponseEntity<ApiResponse<TodoResponse>> addTag(
+            @PathVariable String id,
+            @RequestBody AddTagRequest request) {
+        return ResponseEntity.ok(todoService.addTag(id, request.tag()));
+    }
+
+    @DeleteMapping("/{id}/tags")
+    public ResponseEntity<ApiResponse<TodoResponse>> removeTag(
+            @PathVariable String id,
+            @RequestParam String tag) {
+        return ResponseEntity.ok(todoService.removeTag(id, tag));
     }
 }

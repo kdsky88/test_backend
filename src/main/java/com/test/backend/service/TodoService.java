@@ -20,6 +20,7 @@ import com.test.backend.dto.response.CalendarResponse;
 import java.time.Instant;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,38 +30,49 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TodoService {
 
+    private static final String UNASSIGNED_TOKEN = "@unassigned";
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final int TAG_MAX_COUNT = 10;
+    private static final int TAG_MAX_LENGTH = 20;
+
     private final TodoRepository todoRepository;
 
     @Transactional(readOnly = true)
-    public TodoListResponse getTodos(String status, int page, int limit, String assignee) {
+    public TodoListResponse getTodos(String status, int page, int limit, String assignee, String tag) {
         TodoStatus todoStatus = validateListRequest(status, page, limit);
-        String normalizedAssignee = assignee == null ? null : assignee.strip();
-        if (normalizedAssignee != null && normalizedAssignee.isBlank()) {
-            normalizedAssignee = null;
-        }
+        String normalizedAssignee = normalizeString(assignee);
+        String normalizedTag = normalizeString(tag);
         PageRequest pageable = PageRequest.of(page - 1, limit);
+
+        Boolean completed = switch (todoStatus) {
+            case ALL -> null;
+            case ACTIVE -> false;
+            case COMPLETED -> true;
+        };
+
         Page<Todo> todoPage;
-        if (normalizedAssignee == null) {
-            todoPage = switch (todoStatus) {
-                case ALL -> todoRepository.findAllByPriorityOrder(pageable);
-                case ACTIVE -> todoRepository.findByCompletedOrderByPriority(false, pageable);
-                case COMPLETED -> todoRepository.findByCompletedOrderByPriority(true, pageable);
-            };
-        } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
-            Boolean completed = switch (todoStatus) {
-                case ALL -> null;
-                case ACTIVE -> false;
-                case COMPLETED -> true;
-            };
-            todoPage = todoRepository.findByUnassignedAndCompleted(completed, pageable);
+        if (normalizedTag != null) {
+            if (normalizedAssignee == null) {
+                todoPage = todoRepository.findByTagAndCompleted(normalizedTag, completed, pageable);
+            } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
+                todoPage = todoRepository.findByTagAndUnassignedAndCompleted(normalizedTag, completed, pageable);
+            } else {
+                todoPage = todoRepository.findByTagAndAssigneeAndCompleted(normalizedTag, completed, normalizedAssignee, pageable);
+            }
         } else {
-            Boolean completed = switch (todoStatus) {
-                case ALL -> null;
-                case ACTIVE -> false;
-                case COMPLETED -> true;
-            };
-            todoPage = todoRepository.findByAssigneeAndCompleted(completed, normalizedAssignee, pageable);
+            if (normalizedAssignee == null) {
+                todoPage = switch (todoStatus) {
+                    case ALL -> todoRepository.findAllByPriorityOrder(pageable);
+                    case ACTIVE -> todoRepository.findByCompletedOrderByPriority(false, pageable);
+                    case COMPLETED -> todoRepository.findByCompletedOrderByPriority(true, pageable);
+                };
+            } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
+                todoPage = todoRepository.findByUnassignedAndCompleted(completed, pageable);
+            } else {
+                todoPage = todoRepository.findByAssigneeAndCompleted(completed, normalizedAssignee, pageable);
+            }
         }
+
         Page<TodoResponse> todos = todoPage.map(TodoResponse::new);
         return TodoListResponse.from(todos, page);
     }
@@ -68,6 +80,11 @@ public class TodoService {
     @Transactional(readOnly = true)
     public ApiResponse<List<String>> getAssignees() {
         return new ApiResponse<>(todoRepository.findDistinctAssignees());
+    }
+
+    @Transactional(readOnly = true)
+    public ApiResponse<List<String>> getTags() {
+        return new ApiResponse<>(todoRepository.findDistinctTags());
     }
 
     @Transactional
@@ -78,6 +95,7 @@ public class TodoService {
         validateNote(request.getNote(), fields);
         TodoPriority priority = resolveCreatePriority(request, fields);
         String assignee = resolveAssignee(request.getAssignee(), fields);
+        List<String> tags = resolveTags(request.getTags(), fields);
         if (!fields.isEmpty()) {
             if (fields.containsKey("priority")) {
                 throw invalidPriority();
@@ -93,7 +111,51 @@ public class TodoService {
                 priority,
                 assignee
         );
+        if (tags != null) {
+            tags.forEach(todo::addTag);
+        }
         return new ApiResponse<>(new TodoResponse(todoRepository.save(todo)));
+    }
+
+    @Transactional
+    public ApiResponse<TodoResponse> addTag(String id, String tag) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        String trimmedTag = tag == null ? null : tag.strip();
+        if (trimmedTag == null || trimmedTag.isBlank()) {
+            fields.put("tag", "tag는 비어 있을 수 없습니다.");
+        } else if (trimmedTag.length() > TAG_MAX_LENGTH) {
+            fields.put("tag", "tag는 " + TAG_MAX_LENGTH + "자를 초과할 수 없습니다.");
+        }
+        if (!fields.isEmpty()) {
+            throw validationError(fields);
+        }
+
+        Todo todo = findTodo(id);
+        if (todo.hasTag(trimmedTag)) {
+            return new ApiResponse<>(new TodoResponse(todo));
+        }
+        if (todo.getTags().size() >= TAG_MAX_COUNT) {
+            throw new TodoApiException(HttpStatus.BAD_REQUEST, "TAG_LIMIT_EXCEEDED",
+                    "태그는 최대 " + TAG_MAX_COUNT + "개까지 추가할 수 있습니다.");
+        }
+        todo.addTag(trimmedTag);
+        return new ApiResponse<>(new TodoResponse(todoRepository.saveAndFlush(todo)));
+    }
+
+    @Transactional
+    public ApiResponse<TodoResponse> removeTag(String id, String tag) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        String trimmedTag = tag == null ? null : tag.strip();
+        if (trimmedTag == null || trimmedTag.isBlank()) {
+            fields.put("tag", "tag 파라미터가 필요합니다.");
+        }
+        if (!fields.isEmpty()) {
+            throw validationError(fields);
+        }
+
+        Todo todo = findTodo(id);
+        todo.removeTag(trimmedTag);
+        return new ApiResponse<>(new TodoResponse(todoRepository.saveAndFlush(todo)));
     }
 
     @Transactional
@@ -130,9 +192,6 @@ public class TodoService {
     public void deleteTodo(String id) {
         todoRepository.delete(findTodo(id));
     }
-
-    private static final String UNASSIGNED_TOKEN = "@unassigned";
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Transactional(readOnly = true)
     public CalendarResponse getCalendar(int year, int month) {
@@ -307,6 +366,36 @@ public class TodoService {
             return null;
         }
         String trimmed = assignee.strip();
+        return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private List<String> resolveTags(List<String> tags, Map<String, String> fields) {
+        if (tags == null || tags.isEmpty()) {
+            return null;
+        }
+        List<String> normalized = new ArrayList<>();
+        for (String tag : tags) {
+            if (tag == null) continue;
+            String trimmed = tag.strip();
+            if (trimmed.isBlank()) continue;
+            if (trimmed.length() > TAG_MAX_LENGTH) {
+                fields.put("tags", "태그는 " + TAG_MAX_LENGTH + "자를 초과할 수 없습니다.");
+                return null;
+            }
+            if (!normalized.contains(trimmed)) {
+                normalized.add(trimmed);
+            }
+        }
+        if (normalized.size() > TAG_MAX_COUNT) {
+            fields.put("tags", "태그는 최대 " + TAG_MAX_COUNT + "개까지 지정할 수 있습니다.");
+            return null;
+        }
+        return normalized;
+    }
+
+    private static String normalizeString(String s) {
+        if (s == null) return null;
+        String trimmed = s.strip();
         return trimmed.isBlank() ? null : trimmed;
     }
 
