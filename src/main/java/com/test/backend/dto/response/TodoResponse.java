@@ -2,6 +2,7 @@ package com.test.backend.dto.response;
 
 import com.test.backend.domain.entity.Todo;
 import com.test.backend.domain.entity.TodoPriority;
+import com.test.backend.domain.entity.TodoRecurrence;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -21,7 +22,8 @@ public record TodoResponse(
         Instant createdAt,
         Instant updatedAt,
         String assignee,
-        List<String> tags
+        List<String> tags,
+        TodoRecurrence recurrence
 ) {
     public TodoResponse(Todo todo) {
         this(
@@ -37,7 +39,8 @@ public record TodoResponse(
                 todo.getCreatedAt(),
                 todo.getUpdatedAt(),
                 todo.getAssignee(),
-                todo.getTags().stream().sorted().collect(Collectors.toList())
+                todo.getTags().stream().sorted().collect(Collectors.toList()),
+                todo.getRecurrence()
         );
     }
 }

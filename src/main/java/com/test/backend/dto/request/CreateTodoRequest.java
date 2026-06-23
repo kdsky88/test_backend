@@ -18,6 +18,7 @@ public class CreateTodoRequest {
     private OffsetDateTime dueAt;
     private String assignee;
     private List<String> tags;
+    private String recurrence;
 
     private boolean priorityPresent;
     private String priority;

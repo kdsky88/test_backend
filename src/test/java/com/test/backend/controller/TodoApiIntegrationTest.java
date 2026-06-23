@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -222,5 +223,70 @@ class TodoApiIntegrationTest {
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString())
                 .path("data").path("id").asText();
+    }
+
+    @Test
+    void completingRecurringTodoSpawnsNextOccurrence() throws Exception {
+        MvcResult created = mockMvc.perform(post("/todos")
+                        .contentType("application/json")
+                        .content("""
+                                {"title":"운동","priority":"MEDIUM",
+                                 "dueAt":"2026-06-10T09:00:00+09:00","recurrence":"DAILY"}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String id = objectMapper.readTree(created.getResponse().getContentAsString())
+                .path("data").path("id").asText();
+
+        // 완료 처리 → 다음 날짜의 반복 항목 생성
+        mockMvc.perform(patch("/todos/" + id)
+                        .contentType("application/json")
+                        .content("{\"completed\":true}"))
+                .andExpect(status().isOk());
+
+        // 미완료(새로 생성된 다음 주기) 1건: 마감일 +1일, recurrence 유지
+        mockMvc.perform(get("/todos").param("status", "active"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.total").value(1))
+                .andExpect(jsonPath("$.data[0].title").value("운동"))
+                .andExpect(jsonPath("$.data[0].completed").value(false))
+                .andExpect(jsonPath("$.data[0].recurrence").value("DAILY"))
+                .andExpect(jsonPath("$.data[0].dueAt", startsWith("2026-06-11")));
+
+        // 완료된 원본 1건
+        mockMvc.perform(get("/todos").param("status", "completed"))
+                .andExpect(jsonPath("$.meta.total").value(1));
+    }
+
+    @Test
+    void rejectsRecurrenceWithoutDueAt() throws Exception {
+        mockMvc.perform(post("/todos")
+                        .contentType("application/json")
+                        .content("{\"title\":\"반복\",\"priority\":\"LOW\",\"recurrence\":\"WEEKLY\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.error.fields.recurrence").exists());
+    }
+
+    @Test
+    void statsReturnsCounts() throws Exception {
+        createTodo("활성", "LOW");
+        String doneId = createAndReturnId("완료", "HIGH");
+        mockMvc.perform(patch("/todos/" + doneId)
+                        .contentType("application/json")
+                        .content("{\"completed\":true}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/todos")
+                        .contentType("application/json")
+                        .content("{\"title\":\"지연\",\"priority\":\"MEDIUM\",\"dueAt\":\"2020-01-01T09:00:00+09:00\"}"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/todos/stats"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(3))
+                .andExpect(jsonPath("$.data.completed").value(1))
+                .andExpect(jsonPath("$.data.active").value(2))
+                .andExpect(jsonPath("$.data.overdue").value(1))
+                .andExpect(jsonPath("$.data.dueToday").value(0));
     }
 }

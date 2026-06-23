@@ -2,6 +2,7 @@ package com.test.backend.service;
 
 import com.test.backend.domain.entity.Todo;
 import com.test.backend.domain.entity.TodoPriority;
+import com.test.backend.domain.entity.TodoRecurrence;
 import com.test.backend.dto.request.CreateTodoRequest;
 import com.test.backend.dto.request.UpdateTodoRequest;
 import com.test.backend.dto.response.ApiResponse;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.test.backend.dto.response.CalendarResponse;
+import com.test.backend.dto.response.TodoStats;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -81,6 +83,21 @@ public class TodoService {
     }
 
     @Transactional(readOnly = true)
+    public ApiResponse<TodoStats> getStats() {
+        OffsetDateTime now = OffsetDateTime.now();
+        LocalDate today = LocalDate.now(KST);
+        OffsetDateTime startOfToday = today.atStartOfDay(KST).toOffsetDateTime();
+        OffsetDateTime endOfToday = today.plusDays(1).atStartOfDay(KST).toOffsetDateTime();
+
+        long total = todoRepository.count();
+        long completed = todoRepository.countByCompleted(true);
+        long overdue = todoRepository.countOverdue(now);
+        long dueToday = todoRepository.countDueBetween(startOfToday, endOfToday);
+        return new ApiResponse<>(
+                new TodoStats(total, completed, total - completed, overdue, dueToday));
+    }
+
+    @Transactional(readOnly = true)
     public ApiResponse<List<String>> getAssignees() {
         return new ApiResponse<>(todoRepository.findDistinctAssignees());
     }
@@ -97,6 +114,7 @@ public class TodoService {
         validateDescription(request.getDescription(), fields);
         validateNote(request.getNote(), fields);
         validateStartNotAfterDue(request.getStartAt(), request.getDueAt(), fields);
+        validateRecurrenceWithDue(request.getRecurrence(), request.getDueAt(), fields);
         TodoPriority priority = resolveCreatePriority(request, fields);
         String assignee = resolveAssignee(request.getAssignee(), fields);
         List<String> tags = resolveTags(request.getTags(), fields);
@@ -116,6 +134,7 @@ public class TodoService {
                 assignee
         );
         todo.updateStartAt(request.getStartAt());
+        todo.updateRecurrence(parseRecurrence(request.getRecurrence()));
         if (tags != null) {
             tags.forEach(todo::addTag);
         }
@@ -170,12 +189,23 @@ public class TodoService {
 
         OffsetDateTime effectiveStart = request.isStartAtPresent() ? request.getStartAt() : todo.getStartAt();
         OffsetDateTime effectiveDue = request.isDueAtPresent() ? request.getDueAt() : todo.getDueAt();
+        TodoRecurrence effectiveRecurrence = request.isRecurrencePresent()
+                ? parseRecurrence(request.getRecurrence())
+                : todo.getRecurrence();
         Map<String, String> dateFields = new LinkedHashMap<>();
         validateStartNotAfterDue(effectiveStart, effectiveDue, dateFields);
+        if (effectiveRecurrence != TodoRecurrence.NONE && effectiveDue == null) {
+            dateFields.put("recurrence", "반복 일정은 마감일이 필요합니다.");
+        }
         if (!dateFields.isEmpty()) {
             throw validationError(dateFields);
         }
 
+        boolean wasCompleted = todo.isCompleted();
+
+        if (request.isRecurrencePresent()) {
+            todo.updateRecurrence(effectiveRecurrence);
+        }
         if (request.isTitlePresent()) {
             todo.updateTitle(request.getTitle().strip());
         }
@@ -201,7 +231,40 @@ public class TodoService {
             todo.updateAssignee(normalizeAssigneeForUpdate(request.getAssignee()));
         }
         // saveAndFlush로 @LastModifiedDate가 DB에 반영된 값을 응답에 포함
-        return new ApiResponse<>(new TodoResponse(todoRepository.saveAndFlush(todo)));
+        Todo saved = todoRepository.saveAndFlush(todo);
+        // 반복 항목을 '완료'로 전환하면 다음 주기 항목을 자동 생성
+        if (!wasCompleted && saved.isCompleted()
+                && saved.getRecurrence() != TodoRecurrence.NONE) {
+            spawnNextOccurrence(saved);
+        }
+        return new ApiResponse<>(new TodoResponse(saved));
+    }
+
+    private void spawnNextOccurrence(Todo source) {
+        Todo next = new Todo(
+                source.getTitle(),
+                source.getDescription(),
+                source.getNote(),
+                shiftDate(source.getDueAt(), source.getRecurrence()),
+                source.getPriority(),
+                source.getAssignee()
+        );
+        next.updateStartAt(shiftDate(source.getStartAt(), source.getRecurrence()));
+        next.updateRecurrence(source.getRecurrence());
+        source.getTags().forEach(next::addTag);
+        todoRepository.save(next);
+    }
+
+    private OffsetDateTime shiftDate(OffsetDateTime base, TodoRecurrence recurrence) {
+        if (base == null) {
+            return null;
+        }
+        return switch (recurrence) {
+            case DAILY -> base.plusDays(1);
+            case WEEKLY -> base.plusWeeks(1);
+            case MONTHLY -> base.plusMonths(1);
+            case NONE -> base;
+        };
     }
 
     @Transactional
@@ -290,12 +353,42 @@ public class TodoService {
         if (request.isAssigneePresent() && request.getAssignee() != null) {
             validateAssigneeField(request.getAssignee(), fields);
         }
+        if (request.isRecurrencePresent()) {
+            validateRecurrence(request.getRecurrence(), fields);
+        }
         if (!fields.isEmpty()) {
             if (fields.containsKey("priority")) {
                 throw invalidPriority();
             }
             throw validationError(fields);
         }
+    }
+
+    private void validateRecurrence(String recurrence, Map<String, String> fields) {
+        if (recurrence == null) {
+            return;
+        }
+        try {
+            TodoRecurrence.valueOf(recurrence.trim().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            fields.put("recurrence", "recurrence must be one of NONE, DAILY, WEEKLY, MONTHLY");
+        }
+    }
+
+    private void validateRecurrenceWithDue(String recurrence, OffsetDateTime dueAt, Map<String, String> fields) {
+        validateRecurrence(recurrence, fields);
+        if (!fields.containsKey("recurrence")
+                && parseRecurrence(recurrence) != TodoRecurrence.NONE
+                && dueAt == null) {
+            fields.put("recurrence", "반복 일정은 마감일이 필요합니다.");
+        }
+    }
+
+    private TodoRecurrence parseRecurrence(String recurrence) {
+        if (recurrence == null || recurrence.isBlank()) {
+            return TodoRecurrence.NONE;
+        }
+        return TodoRecurrence.valueOf(recurrence.trim().toUpperCase());
     }
 
     private TodoPriority resolveCreatePriority(CreateTodoRequest request, Map<String, String> fields) {

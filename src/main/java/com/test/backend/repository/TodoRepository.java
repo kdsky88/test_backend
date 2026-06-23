@@ -229,4 +229,12 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
 
     @Query("SELECT DISTINCT tag FROM Todo t JOIN t.tags tag ORDER BY tag")
     List<String> findDistinctTags();
+
+    long countByCompleted(boolean completed);
+
+    @Query("SELECT COUNT(t) FROM Todo t WHERE t.completed = false AND t.dueAt < :now")
+    long countOverdue(@Param("now") OffsetDateTime now);
+
+    @Query("SELECT COUNT(t) FROM Todo t WHERE t.completed = false AND t.dueAt >= :start AND t.dueAt < :end")
+    long countDueBetween(@Param("start") OffsetDateTime start, @Param("end") OffsetDateTime end);
 }

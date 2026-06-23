@@ -34,6 +34,9 @@ public class UpdateTodoRequest {
     private boolean assigneePresent;
     private String assignee;
 
+    private boolean recurrencePresent;
+    private String recurrence;
+
     @JsonSetter("title")
     public void setTitle(String title) {
         this.titlePresent = true;
@@ -82,9 +85,16 @@ public class UpdateTodoRequest {
         this.assignee = assignee;
     }
 
+    @JsonSetter("recurrence")
+    public void setRecurrence(String recurrence) {
+        this.recurrencePresent = true;
+        this.recurrence = recurrence;
+    }
+
     public boolean hasAnyField() {
         return titlePresent || descriptionPresent || notePresent
                 || startAtPresent || dueAtPresent
-                || completedPresent || priorityPresent || assigneePresent;
+                || completedPresent || priorityPresent || assigneePresent
+                || recurrencePresent;
     }
 }

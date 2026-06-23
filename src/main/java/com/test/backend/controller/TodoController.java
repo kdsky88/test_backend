@@ -7,6 +7,7 @@ import com.test.backend.dto.response.ApiResponse;
 import com.test.backend.dto.response.CalendarResponse;
 import com.test.backend.dto.response.TodoListResponse;
 import com.test.backend.dto.response.TodoResponse;
+import com.test.backend.dto.response.TodoStats;
 import com.test.backend.service.TodoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -40,6 +41,11 @@ public class TodoController {
     @GetMapping("/assignees")
     public ResponseEntity<ApiResponse<List<String>>> getAssignees() {
         return ResponseEntity.ok(todoService.getAssignees());
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<ApiResponse<TodoStats>> getStats() {
+        return ResponseEntity.ok(todoService.getStats());
     }
 
     @GetMapping("/tags")

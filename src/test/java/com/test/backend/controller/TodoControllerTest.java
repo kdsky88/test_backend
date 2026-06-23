@@ -1,6 +1,7 @@
 package com.test.backend.controller;
 
 import com.test.backend.domain.entity.TodoPriority;
+import com.test.backend.domain.entity.TodoRecurrence;
 import com.test.backend.dto.response.ApiResponse;
 import com.test.backend.dto.response.TodoListResponse;
 import com.test.backend.dto.response.TodoResponse;
@@ -77,7 +78,8 @@ class TodoControllerTest {
                 null,
                 null,
                 null,
-                List.of()
+                List.of(),
+                TodoRecurrence.NONE
         );
         given(todoService.createTodo(any())).willReturn(new ApiResponse<>(todo));
 
