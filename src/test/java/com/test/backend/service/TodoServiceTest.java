@@ -217,6 +217,57 @@ class TodoServiceTest {
     }
 
     @Test
+    void createsTodoWithStartAt() {
+        OffsetDateTime startAt = OffsetDateTime.parse("2026-06-10T09:00:00+09:00");
+        OffsetDateTime dueAt = OffsetDateTime.parse("2026-06-12T09:00:00+09:00");
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "시작일 있는 할 일");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "startAt", startAt);
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "dueAt", dueAt);
+        given(todoRepository.save(any(Todo.class))).willAnswer(inv -> inv.getArgument(0));
+
+        TodoResponse response = todoService.createTodo(request).data();
+
+        assertThat(response.startAt()).isEqualTo(startAt);
+        assertThat(response.dueAt()).isEqualTo(dueAt);
+    }
+
+    @Test
+    void rejectsStartAtAfterDueAtOnCreate() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "할 일");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                request, "startAt", OffsetDateTime.parse("2026-06-12T09:00:00+09:00"));
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                request, "dueAt", OffsetDateTime.parse("2026-06-10T09:00:00+09:00"));
+
+        assertThatThrownBy(() -> todoService.createTodo(request))
+                .isInstanceOfSatisfying(TodoApiException.class, exception -> {
+                    assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(exception.getFields()).containsKey("startAt");
+                });
+
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
+    void rejectsStartAtAfterExistingDueAtOnUpdate() {
+        OffsetDateTime dueAt = OffsetDateTime.parse("2026-06-10T09:00:00+09:00");
+        Todo todo = new Todo("기존 제목", null, null, dueAt, TodoPriority.MEDIUM);
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        UpdateTodoRequest request = new UpdateTodoRequest();
+        request.setStartAt(OffsetDateTime.parse("2026-06-12T09:00:00+09:00"));
+
+        assertThatThrownBy(() -> todoService.updateTodo(TODO_ID, request))
+                .isInstanceOfSatisfying(TodoApiException.class, exception -> {
+                    assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(exception.getFields()).containsKey("startAt");
+                });
+
+        verify(todoRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void distinguishesAbsentAndNullFieldsWhenUpdating() {
         OffsetDateTime dueAt = OffsetDateTime.parse("2026-06-10T09:00:00+09:00");
         Todo todo = new Todo("기존 제목", "기존 설명", "기존 메모", dueAt, TodoPriority.MEDIUM);

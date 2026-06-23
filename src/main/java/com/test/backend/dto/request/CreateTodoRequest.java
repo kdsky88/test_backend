@@ -14,6 +14,7 @@ public class CreateTodoRequest {
     private String title;
     private String description;
     private String note;
+    private OffsetDateTime startAt;
     private OffsetDateTime dueAt;
     private String assignee;
     private List<String> tags;

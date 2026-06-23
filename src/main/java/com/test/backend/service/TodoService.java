@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.test.backend.dto.response.CalendarResponse;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -93,6 +94,7 @@ public class TodoService {
         validateTitle(request.getTitle(), fields);
         validateDescription(request.getDescription(), fields);
         validateNote(request.getNote(), fields);
+        validateStartNotAfterDue(request.getStartAt(), request.getDueAt(), fields);
         TodoPriority priority = resolveCreatePriority(request, fields);
         String assignee = resolveAssignee(request.getAssignee(), fields);
         List<String> tags = resolveTags(request.getTags(), fields);
@@ -111,6 +113,7 @@ public class TodoService {
                 priority,
                 assignee
         );
+        todo.updateStartAt(request.getStartAt());
         if (tags != null) {
             tags.forEach(todo::addTag);
         }
@@ -163,6 +166,14 @@ public class TodoService {
         validateUpdateRequest(request);
         Todo todo = findTodo(id);
 
+        OffsetDateTime effectiveStart = request.isStartAtPresent() ? request.getStartAt() : todo.getStartAt();
+        OffsetDateTime effectiveDue = request.isDueAtPresent() ? request.getDueAt() : todo.getDueAt();
+        Map<String, String> dateFields = new LinkedHashMap<>();
+        validateStartNotAfterDue(effectiveStart, effectiveDue, dateFields);
+        if (!dateFields.isEmpty()) {
+            throw validationError(dateFields);
+        }
+
         if (request.isTitlePresent()) {
             todo.updateTitle(request.getTitle().strip());
         }
@@ -171,6 +182,9 @@ public class TodoService {
         }
         if (request.isNotePresent()) {
             todo.updateNote(request.getNote());
+        }
+        if (request.isStartAtPresent()) {
+            todo.updateStartAt(request.getStartAt());
         }
         if (request.isDueAtPresent()) {
             todo.updateDueAt(request.getDueAt());
@@ -332,6 +346,12 @@ public class TodoService {
     private void validateNote(String note, Map<String, String> fields) {
         if (note != null && note.length() > 1000) {
             fields.put("note", "note는 1000자를 초과할 수 없습니다.");
+        }
+    }
+
+    private void validateStartNotAfterDue(OffsetDateTime startAt, OffsetDateTime dueAt, Map<String, String> fields) {
+        if (startAt != null && dueAt != null && startAt.isAfter(dueAt)) {
+            fields.put("startAt", "시작일은 마감일보다 늦을 수 없습니다.");
         }
     }
 

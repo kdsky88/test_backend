@@ -58,6 +58,8 @@ public class Todo {
     @Column(length = 50)
     private String assignee;
 
+    private OffsetDateTime startAt;
+
     private OffsetDateTime dueAt;
 
     private Instant completedAt;
@@ -134,6 +136,10 @@ public class Todo {
 
     public void updateDueAt(OffsetDateTime dueAt) {
         this.dueAt = dueAt;
+    }
+
+    public void updateStartAt(OffsetDateTime startAt) {
+        this.startAt = startAt;
     }
 
     public void updatePriority(TodoPriority priority) {

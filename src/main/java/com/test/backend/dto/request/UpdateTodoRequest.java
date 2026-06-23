@@ -19,6 +19,9 @@ public class UpdateTodoRequest {
     private boolean notePresent;
     private String note;
 
+    private boolean startAtPresent;
+    private OffsetDateTime startAt;
+
     private boolean dueAtPresent;
     private OffsetDateTime dueAt;
 
@@ -49,6 +52,12 @@ public class UpdateTodoRequest {
         this.note = note;
     }
 
+    @JsonSetter("startAt")
+    public void setStartAt(OffsetDateTime startAt) {
+        this.startAtPresent = true;
+        this.startAt = startAt;
+    }
+
     @JsonSetter("dueAt")
     public void setDueAt(OffsetDateTime dueAt) {
         this.dueAtPresent = true;
@@ -74,7 +83,8 @@ public class UpdateTodoRequest {
     }
 
     public boolean hasAnyField() {
-        return titlePresent || descriptionPresent || notePresent || dueAtPresent
+        return titlePresent || descriptionPresent || notePresent
+                || startAtPresent || dueAtPresent
                 || completedPresent || priorityPresent || assigneePresent;
     }
 }
