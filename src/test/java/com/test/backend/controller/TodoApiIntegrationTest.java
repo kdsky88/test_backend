@@ -171,4 +171,56 @@ class TodoApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(3));
     }
+
+    @Test
+    void calendarSpreadsTodoAcrossStartToDue() throws Exception {
+        mockMvc.perform(post("/todos")
+                        .contentType("application/json")
+                        .content("""
+                                {"title":"여행","priority":"MEDIUM",
+                                 "startAt":"2026-06-10T09:00:00+09:00",
+                                 "dueAt":"2026-06-12T18:00:00+09:00"}
+                                """))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/todos/calendar").param("year", "2026").param("month", "6"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data['2026-06-10'][0].title").value("여행"))
+                .andExpect(jsonPath("$.data['2026-06-11'][0].title").value("여행"))
+                .andExpect(jsonPath("$.data['2026-06-12'][0].title").value("여행"))
+                .andExpect(jsonPath("$.data['2026-06-13']").doesNotExist());
+    }
+
+    @Test
+    void completedSortsToBottomAndHideCompletedExcludesThem() throws Exception {
+        createTodo("활성-낮음", "LOW");
+        String doneId = createAndReturnId("완료-높음", "HIGH");
+        mockMvc.perform(patch("/todos/" + doneId)
+                        .contentType("application/json")
+                        .content("{\"completed\":true}"))
+                .andExpect(status().isOk());
+        createTodo("활성-높음", "HIGH");
+
+        // 전체: 완료 항목은 우선순위와 무관하게 맨 아래
+        mockMvc.perform(get("/todos").param("status", "all"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(3))
+                .andExpect(jsonPath("$.data[2].title").value("완료-높음"))
+                .andExpect(jsonPath("$.data[2].completed").value(true));
+
+        // 완료 숨기기: 완료 항목 제외
+        mockMvc.perform(get("/todos").param("status", "all").param("hideCompleted", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.total").value(2));
+    }
+
+    private String createAndReturnId(String title, String priority) throws Exception {
+        MvcResult result = mockMvc.perform(post("/todos")
+                        .contentType("application/json")
+                        .content("{\"title\":\"" + title + "\",\"priority\":\"" + priority + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString())
+                .path("data").path("id").asText();
+    }
 }

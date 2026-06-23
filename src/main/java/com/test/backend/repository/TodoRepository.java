@@ -16,6 +16,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
             value = """
                     SELECT t FROM Todo t
                     ORDER BY
+                        t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
                         CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
                         CASE WHEN :sort = 'PRIORITY' THEN
@@ -36,6 +37,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     SELECT t FROM Todo t
                     WHERE t.completed = :completed
                     ORDER BY
+                        t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
                         CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
                         CASE WHEN :sort = 'PRIORITY' THEN
@@ -61,6 +63,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     WHERE (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
                     ORDER BY
+                        t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
                         CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
                         CASE WHEN :sort = 'PRIORITY' THEN
@@ -91,6 +94,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     WHERE (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
                     ORDER BY
+                        t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
                         CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
                         CASE WHEN :sort = 'PRIORITY' THEN
@@ -117,8 +121,13 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query("SELECT DISTINCT t.assignee FROM Todo t WHERE t.assignee IS NOT NULL AND t.assignee <> '' ORDER BY t.assignee")
     List<String> findDistinctAssignees();
 
-    @Query("SELECT t FROM Todo t WHERE t.dueAt >= :start AND t.dueAt < :end ORDER BY t.dueAt ASC, t.id ASC")
-    List<Todo> findByDueAtBetween(@Param("start") OffsetDateTime start, @Param("end") OffsetDateTime end);
+    @Query("""
+            SELECT t FROM Todo t
+            WHERE COALESCE(t.startAt, t.dueAt) < :end
+            AND COALESCE(t.dueAt, t.startAt) >= :start
+            ORDER BY COALESCE(t.dueAt, t.startAt) ASC, t.id ASC
+            """)
+    List<Todo> findByDateRangeOverlap(@Param("start") OffsetDateTime start, @Param("end") OffsetDateTime end);
 
     @Query(
             value = """
@@ -126,6 +135,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     WHERE :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     ORDER BY
+                        t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
                         CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
                         CASE WHEN :sort = 'PRIORITY' THEN
@@ -157,6 +167,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
                     ORDER BY
+                        t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
                         CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
                         CASE WHEN :sort = 'PRIORITY' THEN
@@ -189,6 +200,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
                     ORDER BY
+                        t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
                         CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
                         CASE WHEN :sort = 'PRIORITY' THEN

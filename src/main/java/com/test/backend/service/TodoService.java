@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.test.backend.dto.response.CalendarResponse;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -25,7 +26,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -39,7 +39,7 @@ public class TodoService {
     private final TodoRepository todoRepository;
 
     @Transactional(readOnly = true)
-    public TodoListResponse getTodos(String status, int page, int limit, String assignee, String tag, String sort) {
+    public TodoListResponse getTodos(String status, int page, int limit, String assignee, String tag, String sort, boolean hideCompleted) {
         TodoStatus todoStatus = validateListRequest(status, page, limit);
         String normalizedAssignee = normalizeString(assignee);
         String normalizedTag = normalizeString(tag);
@@ -51,6 +51,9 @@ public class TodoService {
             case ACTIVE -> false;
             case COMPLETED -> true;
         };
+        if (hideCompleted && completed == null) {
+            completed = false; // '전체' + 완료 숨기기 → 미완료만
+        }
 
         Page<Todo> todoPage;
         if (normalizedTag != null) {
@@ -63,11 +66,9 @@ public class TodoService {
             }
         } else {
             if (normalizedAssignee == null) {
-                todoPage = switch (todoStatus) {
-                    case ALL -> todoRepository.findAllByPriorityOrder(sortToken, pageable);
-                    case ACTIVE -> todoRepository.findByCompletedOrderByPriority(false, sortToken, pageable);
-                    case COMPLETED -> todoRepository.findByCompletedOrderByPriority(true, sortToken, pageable);
-                };
+                todoPage = (completed == null)
+                        ? todoRepository.findAllByPriorityOrder(sortToken, pageable)
+                        : todoRepository.findByCompletedOrderByPriority(completed, sortToken, pageable);
             } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
                 todoPage = todoRepository.findByUnassignedAndCompleted(completed, sortToken, pageable);
             } else {
@@ -218,15 +219,23 @@ public class TodoService {
         YearMonth ym = YearMonth.of(year, month);
         var start = ym.atDay(1).atStartOfDay(KST).toOffsetDateTime();
         var end   = ym.plusMonths(1).atDay(1).atStartOfDay(KST).toOffsetDateTime();
+        LocalDate monthFirst = ym.atDay(1);
+        LocalDate monthLast = ym.atEndOfMonth();
 
-        Map<String, List<TodoResponse>> grouped = todoRepository
-            .findByDueAtBetween(start, end)
-            .stream()
-            .collect(Collectors.groupingBy(
-                t -> t.getDueAt().atZoneSameInstant(KST).toLocalDate().toString(),
-                LinkedHashMap::new,
-                Collectors.mapping(TodoResponse::new, Collectors.toList())
-            ));
+        // 시작일~마감일 사이의 모든 날짜에 배치(월 범위로 클램프). 한쪽만 있으면 그 하루만.
+        Map<String, List<TodoResponse>> grouped = new LinkedHashMap<>();
+        for (Todo todo : todoRepository.findByDateRangeOverlap(start, end)) {
+            OffsetDateTime rangeStart = todo.getStartAt() != null ? todo.getStartAt() : todo.getDueAt();
+            OffsetDateTime rangeEnd = todo.getDueAt() != null ? todo.getDueAt() : todo.getStartAt();
+            LocalDate from = rangeStart.atZoneSameInstant(KST).toLocalDate();
+            LocalDate to = rangeEnd.atZoneSameInstant(KST).toLocalDate();
+            if (from.isBefore(monthFirst)) from = monthFirst;
+            if (to.isAfter(monthLast)) to = monthLast;
+            TodoResponse resp = new TodoResponse(todo);
+            for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+                grouped.computeIfAbsent(d.toString(), key -> new ArrayList<>()).add(resp);
+            }
+        }
         return new CalendarResponse(grouped);
     }
 
