@@ -134,4 +134,41 @@ class TodoApiIntegrationTest {
                                 """.formatted(title, priority)))
                 .andExpect(status().isCreated());
     }
+
+    private void createTodoWithDue(String title, String priority, String dueAt) throws Exception {
+        String body = dueAt == null
+                ? "{\"title\":\"" + title + "\",\"priority\":\"" + priority + "\"}"
+                : "{\"title\":\"" + title + "\",\"priority\":\"" + priority
+                        + "\",\"dueAt\":\"" + dueAt + "\"}";
+        mockMvc.perform(post("/todos")
+                        .contentType("application/json")
+                        .content(body))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void sortsListByPriorityDueAtAndCreatedAt() throws Exception {
+        createTodoWithDue("작업 A", "LOW", "2026-06-01T09:00:00+09:00");
+        createTodoWithDue("작업 B", "HIGH", "2026-06-03T09:00:00+09:00");
+        createTodoWithDue("작업 C", "MEDIUM", null);
+
+        // 기본(priority): 높음 → 보통 → 낮음
+        mockMvc.perform(get("/todos").param("sort", "priority"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].title").value("작업 B"))
+                .andExpect(jsonPath("$.data[1].title").value("작업 C"))
+                .andExpect(jsonPath("$.data[2].title").value("작업 A"));
+
+        // 마감일순: 빠른 날짜 먼저, 마감일 없는 건 마지막
+        mockMvc.perform(get("/todos").param("sort", "dueAt"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].title").value("작업 A"))
+                .andExpect(jsonPath("$.data[1].title").value("작업 B"))
+                .andExpect(jsonPath("$.data[2].title").value("작업 C"));
+
+        // 등록순(createdAt) 분기도 정상 실행 (동일 시각 tie라 순서는 단정하지 않음)
+        mockMvc.perform(get("/todos").param("sort", "createdAt"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(3));
+    }
 }

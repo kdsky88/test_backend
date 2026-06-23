@@ -39,10 +39,11 @@ public class TodoService {
     private final TodoRepository todoRepository;
 
     @Transactional(readOnly = true)
-    public TodoListResponse getTodos(String status, int page, int limit, String assignee, String tag) {
+    public TodoListResponse getTodos(String status, int page, int limit, String assignee, String tag, String sort) {
         TodoStatus todoStatus = validateListRequest(status, page, limit);
         String normalizedAssignee = normalizeString(assignee);
         String normalizedTag = normalizeString(tag);
+        String sortToken = normalizeSort(sort);
         PageRequest pageable = PageRequest.of(page - 1, limit);
 
         Boolean completed = switch (todoStatus) {
@@ -54,23 +55,23 @@ public class TodoService {
         Page<Todo> todoPage;
         if (normalizedTag != null) {
             if (normalizedAssignee == null) {
-                todoPage = todoRepository.findByTagAndCompleted(normalizedTag, completed, pageable);
+                todoPage = todoRepository.findByTagAndCompleted(normalizedTag, completed, sortToken, pageable);
             } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
-                todoPage = todoRepository.findByTagAndUnassignedAndCompleted(normalizedTag, completed, pageable);
+                todoPage = todoRepository.findByTagAndUnassignedAndCompleted(normalizedTag, completed, sortToken, pageable);
             } else {
-                todoPage = todoRepository.findByTagAndAssigneeAndCompleted(normalizedTag, completed, normalizedAssignee, pageable);
+                todoPage = todoRepository.findByTagAndAssigneeAndCompleted(normalizedTag, completed, normalizedAssignee, sortToken, pageable);
             }
         } else {
             if (normalizedAssignee == null) {
                 todoPage = switch (todoStatus) {
-                    case ALL -> todoRepository.findAllByPriorityOrder(pageable);
-                    case ACTIVE -> todoRepository.findByCompletedOrderByPriority(false, pageable);
-                    case COMPLETED -> todoRepository.findByCompletedOrderByPriority(true, pageable);
+                    case ALL -> todoRepository.findAllByPriorityOrder(sortToken, pageable);
+                    case ACTIVE -> todoRepository.findByCompletedOrderByPriority(false, sortToken, pageable);
+                    case COMPLETED -> todoRepository.findByCompletedOrderByPriority(true, sortToken, pageable);
                 };
             } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
-                todoPage = todoRepository.findByUnassignedAndCompleted(completed, pageable);
+                todoPage = todoRepository.findByUnassignedAndCompleted(completed, sortToken, pageable);
             } else {
-                todoPage = todoRepository.findByAssigneeAndCompleted(completed, normalizedAssignee, pageable);
+                todoPage = todoRepository.findByAssigneeAndCompleted(completed, normalizedAssignee, sortToken, pageable);
             }
         }
 
@@ -417,6 +418,16 @@ public class TodoService {
         if (s == null) return null;
         String trimmed = s.strip();
         return trimmed.isBlank() ? null : trimmed;
+    }
+
+    /** 정렬 키를 쿼리에서 쓰는 토큰으로 정규화. 알 수 없는 값은 기본(PRIORITY). */
+    private static String normalizeSort(String sort) {
+        if (sort == null) return "PRIORITY";
+        return switch (sort.trim().toLowerCase()) {
+            case "dueat", "due" -> "DUE";
+            case "createdat", "created", "latest" -> "CREATED";
+            default -> "PRIORITY";
+        };
     }
 
     private TodoApiException validationError(Map<String, String> fields) {

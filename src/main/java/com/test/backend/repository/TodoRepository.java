@@ -15,30 +15,43 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query(
             value = """
                     SELECT t FROM Todo t
-                    ORDER BY CASE t.priority
-                        WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
-                        WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
-                        WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
-                    END ASC, t.createdAt DESC, t.id DESC
+                    ORDER BY
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
                     """,
             countQuery = "SELECT COUNT(t) FROM Todo t"
     )
-    Page<Todo> findAllByPriorityOrder(Pageable pageable);
+    Page<Todo> findAllByPriorityOrder(@Param("sort") String sort, Pageable pageable);
 
     @Query(
             value = """
                     SELECT t FROM Todo t
                     WHERE t.completed = :completed
-                    ORDER BY CASE t.priority
-                        WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
-                        WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
-                        WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
-                    END ASC, t.createdAt DESC, t.id DESC
+                    ORDER BY
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
                     """,
             countQuery = "SELECT COUNT(t) FROM Todo t WHERE t.completed = :completed"
     )
     Page<Todo> findByCompletedOrderByPriority(
             @Param("completed") boolean completed,
+            @Param("sort") String sort,
             Pageable pageable
     );
 
@@ -47,11 +60,17 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     SELECT t FROM Todo t
                     WHERE (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
-                    ORDER BY CASE t.priority
-                        WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
-                        WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
-                        WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
-                    END ASC, t.createdAt DESC, t.id DESC
+                    ORDER BY
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
                     """,
             countQuery = """
                     SELECT COUNT(t) FROM Todo t
@@ -62,6 +81,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     Page<Todo> findByAssigneeAndCompleted(
             @Param("completed") Boolean completed,
             @Param("assignee") String assignee,
+            @Param("sort") String sort,
             Pageable pageable
     );
 
@@ -70,11 +90,17 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     SELECT t FROM Todo t
                     WHERE (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
-                    ORDER BY CASE t.priority
-                        WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
-                        WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
-                        WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
-                    END ASC, t.createdAt DESC, t.id DESC
+                    ORDER BY
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
                     """,
             countQuery = """
                     SELECT COUNT(t) FROM Todo t
@@ -84,6 +110,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     )
     Page<Todo> findByUnassignedAndCompleted(
             @Param("completed") Boolean completed,
+            @Param("sort") String sort,
             Pageable pageable
     );
 
@@ -98,11 +125,17 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     SELECT t FROM Todo t
                     WHERE :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
-                    ORDER BY CASE t.priority
-                        WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
-                        WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
-                        WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
-                    END ASC, t.createdAt DESC, t.id DESC
+                    ORDER BY
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
                     """,
             countQuery = """
                     SELECT COUNT(t) FROM Todo t
@@ -113,6 +146,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     Page<Todo> findByTagAndCompleted(
             @Param("tag") String tag,
             @Param("completed") Boolean completed,
+            @Param("sort") String sort,
             Pageable pageable
     );
 
@@ -122,11 +156,17 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     WHERE :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
-                    ORDER BY CASE t.priority
-                        WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
-                        WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
-                        WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
-                    END ASC, t.createdAt DESC, t.id DESC
+                    ORDER BY
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
                     """,
             countQuery = """
                     SELECT COUNT(t) FROM Todo t
@@ -138,6 +178,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     Page<Todo> findByTagAndUnassignedAndCompleted(
             @Param("tag") String tag,
             @Param("completed") Boolean completed,
+            @Param("sort") String sort,
             Pageable pageable
     );
 
@@ -147,11 +188,17 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     WHERE :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
-                    ORDER BY CASE t.priority
-                        WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
-                        WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
-                        WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
-                    END ASC, t.createdAt DESC, t.id DESC
+                    ORDER BY
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
                     """,
             countQuery = """
                     SELECT COUNT(t) FROM Todo t
@@ -164,6 +211,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
             @Param("tag") String tag,
             @Param("completed") Boolean completed,
             @Param("assignee") String assignee,
+            @Param("sort") String sort,
             Pageable pageable
     );
 

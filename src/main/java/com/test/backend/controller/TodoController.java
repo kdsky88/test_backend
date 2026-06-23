@@ -53,8 +53,9 @@ public class TodoController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) String assignee,
-            @RequestParam(required = false) String tag) {
-        return ResponseEntity.ok(todoService.getTodos(status, page, limit, assignee, tag));
+            @RequestParam(required = false) String tag,
+            @RequestParam(defaultValue = "priority") String sort) {
+        return ResponseEntity.ok(todoService.getTodos(status, page, limit, assignee, tag, sort));
     }
 
     @PostMapping
