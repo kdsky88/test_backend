@@ -7,6 +7,7 @@ import com.test.backend.dto.response.ApiResponse;
 import com.test.backend.dto.response.CalendarResponse;
 import com.test.backend.dto.response.TodoListResponse;
 import com.test.backend.dto.response.TodoResponse;
+import com.test.backend.dto.response.TodoStats;
 import com.test.backend.service.TodoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -42,6 +43,11 @@ public class TodoController {
         return ResponseEntity.ok(todoService.getAssignees());
     }
 
+    @GetMapping("/stats")
+    public ResponseEntity<ApiResponse<TodoStats>> getStats() {
+        return ResponseEntity.ok(todoService.getStats());
+    }
+
     @GetMapping("/tags")
     public ResponseEntity<ApiResponse<List<String>>> getTags() {
         return ResponseEntity.ok(todoService.getTags());
@@ -53,8 +59,11 @@ public class TodoController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) String assignee,
-            @RequestParam(required = false) String tag) {
-        return ResponseEntity.ok(todoService.getTodos(status, page, limit, assignee, tag));
+            @RequestParam(required = false) String tag,
+            @RequestParam(defaultValue = "priority") String sort,
+            @RequestParam(defaultValue = "false") boolean hideCompleted,
+            @RequestParam(required = false) String search) {
+        return ResponseEntity.ok(todoService.getTodos(status, page, limit, assignee, tag, sort, hideCompleted, search));
     }
 
     @PostMapping

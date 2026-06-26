@@ -1,6 +1,7 @@
 package com.test.backend.controller;
 
 import com.test.backend.domain.entity.TodoPriority;
+import com.test.backend.domain.entity.TodoRecurrence;
 import com.test.backend.dto.response.ApiResponse;
 import com.test.backend.dto.response.TodoListResponse;
 import com.test.backend.dto.response.TodoResponse;
@@ -44,7 +45,7 @@ class TodoControllerTest {
 
     @Test
     void returnsFilteredListWithDataAndMeta() throws Exception {
-        given(todoService.getTodos("active", 2, 10, null, null))
+        given(todoService.getTodos("active", 2, 10, null, null, "priority", false, null))
                 .willReturn(new TodoListResponse(
                         List.of(),
                         new TodoListResponse.Meta(2, 10, 0, 0)
@@ -59,7 +60,7 @@ class TodoControllerTest {
                 .andExpect(jsonPath("$.meta.page").value(2))
                 .andExpect(jsonPath("$.meta.limit").value(10));
 
-        verify(todoService).getTodos("active", 2, 10, null, null);
+        verify(todoService).getTodos("active", 2, 10, null, null, "priority", false, null);
     }
 
     @Test
@@ -76,7 +77,9 @@ class TodoControllerTest {
                 null,
                 null,
                 null,
-                List.of()
+                null,
+                List.of(),
+                TodoRecurrence.NONE
         );
         given(todoService.createTodo(any())).willReturn(new ApiResponse<>(todo));
 

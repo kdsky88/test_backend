@@ -29,8 +29,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -55,14 +57,16 @@ class TodoServiceTest {
     void getsActiveTodosWithOneBasedPageAndStableSort() {
         Todo todo = new Todo("할 일", null, null);
         PageRequest requestedPage = PageRequest.of(1, 30);
-        given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), any()))
+        given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), anyString(), nullable(String.class), any()))
                 .willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
 
-        TodoListResponse response = todoService.getTodos("active", 2, 30, null, null);
+        TodoListResponse response = todoService.getTodos("active", 2, 30, null, null, "priority", false, null);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(todoRepository).findByCompletedOrderByPriority(
                 eq(false),
+                anyString(),
+                nullable(String.class),
                 pageableCaptor.capture()
         );
         Pageable pageable = pageableCaptor.getValue();
@@ -75,19 +79,19 @@ class TodoServiceTest {
 
     @Test
     void supportsAllAndCompletedStatusFilters() {
-        given(todoRepository.findAllByPriorityOrder(any(Pageable.class))).willReturn(Page.empty());
-        given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), any())).willReturn(Page.empty());
+        given(todoRepository.findAllByPriorityOrder(anyString(), nullable(String.class), any(Pageable.class))).willReturn(Page.empty());
+        given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), anyString(), nullable(String.class), any())).willReturn(Page.empty());
 
-        todoService.getTodos("all", 1, 20, null, null);
-        todoService.getTodos("completed", 1, 20, null, null);
+        todoService.getTodos("all", 1, 20, null, null, "priority", false, null);
+        todoService.getTodos("completed", 1, 20, null, null, "priority", false, null);
 
-        verify(todoRepository).findAllByPriorityOrder(any(Pageable.class));
-        verify(todoRepository).findByCompletedOrderByPriority(true, PageRequest.of(0, 20));
+        verify(todoRepository).findAllByPriorityOrder(anyString(), nullable(String.class), any(Pageable.class));
+        verify(todoRepository).findByCompletedOrderByPriority(true, "PRIORITY", null, PageRequest.of(0, 20));
     }
 
     @Test
     void rejectsInvalidStatusWithInvalidFilter() {
-        assertThatThrownBy(() -> todoService.getTodos("unknown", 1, 20, null, null))
+        assertThatThrownBy(() -> todoService.getTodos("unknown", 1, 20, null, null, "priority", false, null))
                 .isInstanceOfSatisfying(TodoApiException.class, exception ->
                     assertThat(exception.getCode()).isEqualTo("INVALID_FILTER"));
         verifyNoInteractions(todoRepository);
@@ -95,7 +99,7 @@ class TodoServiceTest {
 
     @Test
     void rejectsInvalidPageAndLimitWithValidationError() {
-        assertThatThrownBy(() -> todoService.getTodos("all", 0, 101, null, null))
+        assertThatThrownBy(() -> todoService.getTodos("all", 0, 101, null, null, "priority", false, null))
                 .isInstanceOfSatisfying(TodoApiException.class, exception -> {
                     assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
                     assertThat(exception.getFields()).containsKeys("page", "limit");
@@ -214,6 +218,57 @@ class TodoServiceTest {
                 });
 
         verifyNoInteractions(todoRepository);
+    }
+
+    @Test
+    void createsTodoWithStartAt() {
+        OffsetDateTime startAt = OffsetDateTime.parse("2026-06-10T09:00:00+09:00");
+        OffsetDateTime dueAt = OffsetDateTime.parse("2026-06-12T09:00:00+09:00");
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "시작일 있는 할 일");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "startAt", startAt);
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "dueAt", dueAt);
+        given(todoRepository.save(any(Todo.class))).willAnswer(inv -> inv.getArgument(0));
+
+        TodoResponse response = todoService.createTodo(request).data();
+
+        assertThat(response.startAt()).isEqualTo(startAt);
+        assertThat(response.dueAt()).isEqualTo(dueAt);
+    }
+
+    @Test
+    void rejectsStartAtAfterDueAtOnCreate() {
+        CreateTodoRequest request = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "할 일");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                request, "startAt", OffsetDateTime.parse("2026-06-12T09:00:00+09:00"));
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                request, "dueAt", OffsetDateTime.parse("2026-06-10T09:00:00+09:00"));
+
+        assertThatThrownBy(() -> todoService.createTodo(request))
+                .isInstanceOfSatisfying(TodoApiException.class, exception -> {
+                    assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(exception.getFields()).containsKey("startAt");
+                });
+
+        verifyNoInteractions(todoRepository);
+    }
+
+    @Test
+    void rejectsStartAtAfterExistingDueAtOnUpdate() {
+        OffsetDateTime dueAt = OffsetDateTime.parse("2026-06-10T09:00:00+09:00");
+        Todo todo = new Todo("기존 제목", null, null, dueAt, TodoPriority.MEDIUM);
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        UpdateTodoRequest request = new UpdateTodoRequest();
+        request.setStartAt(OffsetDateTime.parse("2026-06-12T09:00:00+09:00"));
+
+        assertThatThrownBy(() -> todoService.updateTodo(TODO_ID, request))
+                .isInstanceOfSatisfying(TodoApiException.class, exception -> {
+                    assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(exception.getFields()).containsKey("startAt");
+                });
+
+        verify(todoRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -369,14 +424,18 @@ class TodoServiceTest {
         given(todoRepository.findByAssigneeAndCompleted(
                 isNull(),
                 eq("철수"),
+                anyString(),
+                nullable(String.class),
                 any(Pageable.class)
         )).willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
 
-        TodoListResponse response = todoService.getTodos("all", 1, 20, "철수", null);
+        TodoListResponse response = todoService.getTodos("all", 1, 20, "철수", null, "priority", false, null);
 
         verify(todoRepository).findByAssigneeAndCompleted(
                 isNull(),
                 eq("철수"),
+                anyString(),
+                nullable(String.class),
                 any(Pageable.class)
         );
         assertThat(response.meta().total()).isEqualTo(1);
@@ -387,13 +446,17 @@ class TodoServiceTest {
         PageRequest requestedPage = PageRequest.of(0, 20);
         given(todoRepository.findByUnassignedAndCompleted(
                 isNull(),
+                anyString(),
+                nullable(String.class),
                 any(Pageable.class)
         )).willReturn(new PageImpl<>(List.of(), requestedPage, 0));
 
-        todoService.getTodos("all", 1, 20, "@unassigned", null);
+        todoService.getTodos("all", 1, 20, "@unassigned", null, "priority", false, null);
 
         verify(todoRepository).findByUnassignedAndCompleted(
                 isNull(),
+                anyString(),
+                nullable(String.class),
                 any(Pageable.class)
         );
     }
@@ -448,7 +511,7 @@ class TodoServiceTest {
 
     @Test
     void groupsTodosByKstDate() {
-        given(todoRepository.findByDueAtBetween(any(), any())).willReturn(List.of(
+        given(todoRepository.findByDateRangeOverlap(any(), any())).willReturn(List.of(
             new Todo("아침", null, OffsetDateTime.parse("2026-06-15T00:00:00+09:00")),
             new Todo("저녁", null, OffsetDateTime.parse("2026-06-15T21:00:00+09:00"))
         ));
@@ -619,12 +682,14 @@ class TodoServiceTest {
         given(todoRepository.findByTagAndCompleted(
                 eq("업무"),
                 isNull(),
+                anyString(),
+                nullable(String.class),
                 any(Pageable.class)
         )).willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
 
-        TodoListResponse response = todoService.getTodos("all", 1, 20, null, "업무");
+        TodoListResponse response = todoService.getTodos("all", 1, 20, null, "업무", "priority", false, null);
 
-        verify(todoRepository).findByTagAndCompleted(eq("업무"), isNull(), any(Pageable.class));
+        verify(todoRepository).findByTagAndCompleted(eq("업무"), isNull(), anyString(), nullable(String.class), any(Pageable.class));
         assertThat(response.meta().total()).isEqualTo(1);
         assertThat(response.data().get(0).tags()).containsExactly("업무");
     }
@@ -635,11 +700,13 @@ class TodoServiceTest {
         given(todoRepository.findByTagAndCompleted(
                 eq("긴급"),
                 eq(false),
+                anyString(),
+                nullable(String.class),
                 any(Pageable.class)
         )).willReturn(new PageImpl<>(List.of(), requestedPage, 0));
 
-        todoService.getTodos("active", 1, 20, null, "긴급");
+        todoService.getTodos("active", 1, 20, null, "긴급", "priority", false, null);
 
-        verify(todoRepository).findByTagAndCompleted(eq("긴급"), eq(false), any(Pageable.class));
+        verify(todoRepository).findByTagAndCompleted(eq("긴급"), eq(false), anyString(), nullable(String.class), any(Pageable.class));
     }
 }

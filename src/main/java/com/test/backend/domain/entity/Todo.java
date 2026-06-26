@@ -58,6 +58,12 @@ public class Todo {
     @Column(length = 50)
     private String assignee;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10, columnDefinition = "VARCHAR(10) DEFAULT 'NONE'")
+    private TodoRecurrence recurrence = TodoRecurrence.NONE;
+
+    private OffsetDateTime startAt;
+
     private OffsetDateTime dueAt;
 
     private Instant completedAt;
@@ -134,6 +140,14 @@ public class Todo {
 
     public void updateDueAt(OffsetDateTime dueAt) {
         this.dueAt = dueAt;
+    }
+
+    public void updateStartAt(OffsetDateTime startAt) {
+        this.startAt = startAt;
+    }
+
+    public void updateRecurrence(TodoRecurrence recurrence) {
+        this.recurrence = recurrence == null ? TodoRecurrence.NONE : recurrence;
     }
 
     public void updatePriority(TodoPriority priority) {
