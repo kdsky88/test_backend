@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -56,15 +57,16 @@ class TodoServiceTest {
     void getsActiveTodosWithOneBasedPageAndStableSort() {
         Todo todo = new Todo("할 일", null, null);
         PageRequest requestedPage = PageRequest.of(1, 30);
-        given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), anyString(), any()))
+        given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), anyString(), nullable(String.class), any()))
                 .willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
 
-        TodoListResponse response = todoService.getTodos("active", 2, 30, null, null, "priority", false);
+        TodoListResponse response = todoService.getTodos("active", 2, 30, null, null, "priority", false, null);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(todoRepository).findByCompletedOrderByPriority(
                 eq(false),
                 anyString(),
+                nullable(String.class),
                 pageableCaptor.capture()
         );
         Pageable pageable = pageableCaptor.getValue();
@@ -77,19 +79,19 @@ class TodoServiceTest {
 
     @Test
     void supportsAllAndCompletedStatusFilters() {
-        given(todoRepository.findAllByPriorityOrder(anyString(), any(Pageable.class))).willReturn(Page.empty());
-        given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), anyString(), any())).willReturn(Page.empty());
+        given(todoRepository.findAllByPriorityOrder(anyString(), nullable(String.class), any(Pageable.class))).willReturn(Page.empty());
+        given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), anyString(), nullable(String.class), any())).willReturn(Page.empty());
 
-        todoService.getTodos("all", 1, 20, null, null, "priority", false);
-        todoService.getTodos("completed", 1, 20, null, null, "priority", false);
+        todoService.getTodos("all", 1, 20, null, null, "priority", false, null);
+        todoService.getTodos("completed", 1, 20, null, null, "priority", false, null);
 
-        verify(todoRepository).findAllByPriorityOrder(anyString(), any(Pageable.class));
-        verify(todoRepository).findByCompletedOrderByPriority(true, "PRIORITY", PageRequest.of(0, 20));
+        verify(todoRepository).findAllByPriorityOrder(anyString(), nullable(String.class), any(Pageable.class));
+        verify(todoRepository).findByCompletedOrderByPriority(true, "PRIORITY", null, PageRequest.of(0, 20));
     }
 
     @Test
     void rejectsInvalidStatusWithInvalidFilter() {
-        assertThatThrownBy(() -> todoService.getTodos("unknown", 1, 20, null, null, "priority", false))
+        assertThatThrownBy(() -> todoService.getTodos("unknown", 1, 20, null, null, "priority", false, null))
                 .isInstanceOfSatisfying(TodoApiException.class, exception ->
                     assertThat(exception.getCode()).isEqualTo("INVALID_FILTER"));
         verifyNoInteractions(todoRepository);
@@ -97,7 +99,7 @@ class TodoServiceTest {
 
     @Test
     void rejectsInvalidPageAndLimitWithValidationError() {
-        assertThatThrownBy(() -> todoService.getTodos("all", 0, 101, null, null, "priority", false))
+        assertThatThrownBy(() -> todoService.getTodos("all", 0, 101, null, null, "priority", false, null))
                 .isInstanceOfSatisfying(TodoApiException.class, exception -> {
                     assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
                     assertThat(exception.getFields()).containsKeys("page", "limit");
@@ -423,15 +425,17 @@ class TodoServiceTest {
                 isNull(),
                 eq("철수"),
                 anyString(),
+                nullable(String.class),
                 any(Pageable.class)
         )).willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
 
-        TodoListResponse response = todoService.getTodos("all", 1, 20, "철수", null, "priority", false);
+        TodoListResponse response = todoService.getTodos("all", 1, 20, "철수", null, "priority", false, null);
 
         verify(todoRepository).findByAssigneeAndCompleted(
                 isNull(),
                 eq("철수"),
                 anyString(),
+                nullable(String.class),
                 any(Pageable.class)
         );
         assertThat(response.meta().total()).isEqualTo(1);
@@ -443,14 +447,16 @@ class TodoServiceTest {
         given(todoRepository.findByUnassignedAndCompleted(
                 isNull(),
                 anyString(),
+                nullable(String.class),
                 any(Pageable.class)
         )).willReturn(new PageImpl<>(List.of(), requestedPage, 0));
 
-        todoService.getTodos("all", 1, 20, "@unassigned", null, "priority", false);
+        todoService.getTodos("all", 1, 20, "@unassigned", null, "priority", false, null);
 
         verify(todoRepository).findByUnassignedAndCompleted(
                 isNull(),
                 anyString(),
+                nullable(String.class),
                 any(Pageable.class)
         );
     }
@@ -677,12 +683,13 @@ class TodoServiceTest {
                 eq("업무"),
                 isNull(),
                 anyString(),
+                nullable(String.class),
                 any(Pageable.class)
         )).willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
 
-        TodoListResponse response = todoService.getTodos("all", 1, 20, null, "업무", "priority", false);
+        TodoListResponse response = todoService.getTodos("all", 1, 20, null, "업무", "priority", false, null);
 
-        verify(todoRepository).findByTagAndCompleted(eq("업무"), isNull(), anyString(), any(Pageable.class));
+        verify(todoRepository).findByTagAndCompleted(eq("업무"), isNull(), anyString(), nullable(String.class), any(Pageable.class));
         assertThat(response.meta().total()).isEqualTo(1);
         assertThat(response.data().get(0).tags()).containsExactly("업무");
     }
@@ -694,11 +701,12 @@ class TodoServiceTest {
                 eq("긴급"),
                 eq(false),
                 anyString(),
+                nullable(String.class),
                 any(Pageable.class)
         )).willReturn(new PageImpl<>(List.of(), requestedPage, 0));
 
-        todoService.getTodos("active", 1, 20, null, "긴급", "priority", false);
+        todoService.getTodos("active", 1, 20, null, "긴급", "priority", false, null);
 
-        verify(todoRepository).findByTagAndCompleted(eq("긴급"), eq(false), anyString(), any(Pageable.class));
+        verify(todoRepository).findByTagAndCompleted(eq("긴급"), eq(false), anyString(), nullable(String.class), any(Pageable.class));
     }
 }

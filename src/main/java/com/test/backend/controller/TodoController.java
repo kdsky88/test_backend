@@ -61,8 +61,9 @@ public class TodoController {
             @RequestParam(required = false) String assignee,
             @RequestParam(required = false) String tag,
             @RequestParam(defaultValue = "priority") String sort,
-            @RequestParam(defaultValue = "false") boolean hideCompleted) {
-        return ResponseEntity.ok(todoService.getTodos(status, page, limit, assignee, tag, sort, hideCompleted));
+            @RequestParam(defaultValue = "false") boolean hideCompleted,
+            @RequestParam(required = false) String search) {
+        return ResponseEntity.ok(todoService.getTodos(status, page, limit, assignee, tag, sort, hideCompleted, search));
     }
 
     @PostMapping

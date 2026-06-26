@@ -41,11 +41,12 @@ public class TodoService {
     private final TodoRepository todoRepository;
 
     @Transactional(readOnly = true)
-    public TodoListResponse getTodos(String status, int page, int limit, String assignee, String tag, String sort, boolean hideCompleted) {
+    public TodoListResponse getTodos(String status, int page, int limit, String assignee, String tag, String sort, boolean hideCompleted, String search) {
         TodoStatus todoStatus = validateListRequest(status, page, limit);
         String normalizedAssignee = normalizeString(assignee);
         String normalizedTag = normalizeString(tag);
         String sortToken = normalizeSort(sort);
+        String searchTerm = normalizeString(search);
         PageRequest pageable = PageRequest.of(page - 1, limit);
 
         Boolean completed = switch (todoStatus) {
@@ -60,21 +61,21 @@ public class TodoService {
         Page<Todo> todoPage;
         if (normalizedTag != null) {
             if (normalizedAssignee == null) {
-                todoPage = todoRepository.findByTagAndCompleted(normalizedTag, completed, sortToken, pageable);
+                todoPage = todoRepository.findByTagAndCompleted(normalizedTag, completed, sortToken, searchTerm, pageable);
             } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
-                todoPage = todoRepository.findByTagAndUnassignedAndCompleted(normalizedTag, completed, sortToken, pageable);
+                todoPage = todoRepository.findByTagAndUnassignedAndCompleted(normalizedTag, completed, sortToken, searchTerm, pageable);
             } else {
-                todoPage = todoRepository.findByTagAndAssigneeAndCompleted(normalizedTag, completed, normalizedAssignee, sortToken, pageable);
+                todoPage = todoRepository.findByTagAndAssigneeAndCompleted(normalizedTag, completed, normalizedAssignee, sortToken, searchTerm, pageable);
             }
         } else {
             if (normalizedAssignee == null) {
                 todoPage = (completed == null)
-                        ? todoRepository.findAllByPriorityOrder(sortToken, pageable)
-                        : todoRepository.findByCompletedOrderByPriority(completed, sortToken, pageable);
+                        ? todoRepository.findAllByPriorityOrder(sortToken, searchTerm, pageable)
+                        : todoRepository.findByCompletedOrderByPriority(completed, sortToken, searchTerm, pageable);
             } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
-                todoPage = todoRepository.findByUnassignedAndCompleted(completed, sortToken, pageable);
+                todoPage = todoRepository.findByUnassignedAndCompleted(completed, sortToken, searchTerm, pageable);
             } else {
-                todoPage = todoRepository.findByAssigneeAndCompleted(completed, normalizedAssignee, sortToken, pageable);
+                todoPage = todoRepository.findByAssigneeAndCompleted(completed, normalizedAssignee, sortToken, searchTerm, pageable);
             }
         }
 

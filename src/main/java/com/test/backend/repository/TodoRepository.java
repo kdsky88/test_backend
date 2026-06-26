@@ -12,9 +12,12 @@ import java.util.List;
 
 public interface TodoRepository extends JpaRepository<Todo, String> {
 
+    // 공통 정렬(ORDER BY)·검색(:search 제목 LIKE)을 모든 목록 쿼리에 동일하게 적용.
+
     @Query(
             value = """
                     SELECT t FROM Todo t
+                    WHERE (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     ORDER BY
                         t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
@@ -28,14 +31,22 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                         END ASC,
                         t.createdAt DESC, t.id DESC
                     """,
-            countQuery = "SELECT COUNT(t) FROM Todo t"
+            countQuery = """
+                    SELECT COUNT(t) FROM Todo t
+                    WHERE (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    """
     )
-    Page<Todo> findAllByPriorityOrder(@Param("sort") String sort, Pageable pageable);
+    Page<Todo> findAllByPriorityOrder(
+            @Param("sort") String sort,
+            @Param("search") String search,
+            Pageable pageable
+    );
 
     @Query(
             value = """
                     SELECT t FROM Todo t
                     WHERE t.completed = :completed
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     ORDER BY
                         t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
@@ -49,11 +60,16 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                         END ASC,
                         t.createdAt DESC, t.id DESC
                     """,
-            countQuery = "SELECT COUNT(t) FROM Todo t WHERE t.completed = :completed"
+            countQuery = """
+                    SELECT COUNT(t) FROM Todo t
+                    WHERE t.completed = :completed
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    """
     )
     Page<Todo> findByCompletedOrderByPriority(
             @Param("completed") boolean completed,
             @Param("sort") String sort,
+            @Param("search") String search,
             Pageable pageable
     );
 
@@ -62,6 +78,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     SELECT t FROM Todo t
                     WHERE (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     ORDER BY
                         t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
@@ -79,12 +96,14 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     SELECT COUNT(t) FROM Todo t
                     WHERE (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     """
     )
     Page<Todo> findByAssigneeAndCompleted(
             @Param("completed") Boolean completed,
             @Param("assignee") String assignee,
             @Param("sort") String sort,
+            @Param("search") String search,
             Pageable pageable
     );
 
@@ -93,6 +112,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     SELECT t FROM Todo t
                     WHERE (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     ORDER BY
                         t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
@@ -110,11 +130,13 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     SELECT COUNT(t) FROM Todo t
                     WHERE (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     """
     )
     Page<Todo> findByUnassignedAndCompleted(
             @Param("completed") Boolean completed,
             @Param("sort") String sort,
+            @Param("search") String search,
             Pageable pageable
     );
 
@@ -134,6 +156,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     SELECT t FROM Todo t
                     WHERE :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     ORDER BY
                         t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
@@ -151,12 +174,14 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     SELECT COUNT(t) FROM Todo t
                     WHERE :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     """
     )
     Page<Todo> findByTagAndCompleted(
             @Param("tag") String tag,
             @Param("completed") Boolean completed,
             @Param("sort") String sort,
+            @Param("search") String search,
             Pageable pageable
     );
 
@@ -166,6 +191,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     WHERE :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     ORDER BY
                         t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
@@ -184,12 +210,14 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     WHERE :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     """
     )
     Page<Todo> findByTagAndUnassignedAndCompleted(
             @Param("tag") String tag,
             @Param("completed") Boolean completed,
             @Param("sort") String sort,
+            @Param("search") String search,
             Pageable pageable
     );
 
@@ -199,6 +227,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     WHERE :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     ORDER BY
                         t.completed ASC,
                         CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
@@ -217,6 +246,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     WHERE :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     """
     )
     Page<Todo> findByTagAndAssigneeAndCompleted(
@@ -224,6 +254,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
             @Param("completed") Boolean completed,
             @Param("assignee") String assignee,
             @Param("sort") String sort,
+            @Param("search") String search,
             Pageable pageable
     );
 

@@ -269,6 +269,26 @@ class TodoApiIntegrationTest {
     }
 
     @Test
+    void searchFiltersByTitleCaseInsensitive() throws Exception {
+        createTodo("Grocery shopping", "LOW");
+        createTodo("병원 예약", "HIGH");
+        createTodo("운동", "MEDIUM");
+
+        mockMvc.perform(get("/todos").param("search", "grocery"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.total").value(1))
+                .andExpect(jsonPath("$.data[0].title").value("Grocery shopping"));
+
+        mockMvc.perform(get("/todos").param("search", "병원"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.total").value(1));
+
+        mockMvc.perform(get("/todos").param("search", "zzz"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.total").value(0));
+    }
+
+    @Test
     void statsReturnsCounts() throws Exception {
         createTodo("활성", "LOW");
         String doneId = createAndReturnId("완료", "HIGH");
