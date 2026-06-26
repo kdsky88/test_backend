@@ -1,0 +1,51 @@
+CREATE TABLE users (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    email VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    role VARCHAR(255),
+    refresh_token VARCHAR(512),
+    created_at TIMESTAMP(6),
+    updated_at TIMESTAMP(6),
+    PRIMARY KEY (id),
+    CONSTRAINT uk_users_email UNIQUE (email)
+);
+
+CREATE TABLE posts (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    title VARCHAR(255) NOT NULL,
+    content TEXT,
+    status VARCHAR(255) NOT NULL,
+    user_id BIGINT NOT NULL,
+    created_at TIMESTAMP(6),
+    updated_at TIMESTAMP(6),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_posts_user FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
+CREATE TABLE todos (
+    id VARCHAR(36) NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    description TEXT,
+    note VARCHAR(1000),
+    completed BOOLEAN NOT NULL,
+    priority VARCHAR(10) NOT NULL DEFAULT 'MEDIUM',
+    assignee VARCHAR(50),
+    recurrence VARCHAR(10) NOT NULL DEFAULT 'NONE',
+    start_at TIMESTAMP(6),
+    due_at TIMESTAMP(6),
+    completed_at TIMESTAMP(6),
+    created_at TIMESTAMP(6) NOT NULL,
+    updated_at TIMESTAMP(6) NOT NULL,
+    PRIMARY KEY (id)
+);
+
+CREATE INDEX idx_todos_assignee ON todos (assignee);
+
+CREATE TABLE todo_tags (
+    todo_id VARCHAR(36) NOT NULL,
+    tag VARCHAR(20) NOT NULL,
+    CONSTRAINT fk_todo_tags_todo FOREIGN KEY (todo_id) REFERENCES todos (id)
+);
+
+CREATE INDEX idx_todo_tags_tag ON todo_tags (tag);

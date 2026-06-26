@@ -11,6 +11,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -28,7 +29,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "todos", indexes = {
-    @Index(name = "idx_todos_assignee", columnList = "assignee")
+    @Index(name = "idx_todos_assignee", columnList = "assignee"),
+    @Index(name = "idx_todos_owner", columnList = "owner_id")
 })
 @Getter
 @NoArgsConstructor
@@ -38,6 +40,10 @@ public class Todo {
     @Id
     @Column(length = 36)
     private String id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id", nullable = false)
+    private User owner;
 
     @Column(nullable = false, length = 100)
     private String title;
@@ -156,6 +162,10 @@ public class Todo {
 
     public void updateAssignee(String assignee) {
         this.assignee = assignee;
+    }
+
+    public void assignOwner(User owner) {
+        this.owner = owner;
     }
 
     public void updateCompleted(boolean completed, Instant changedAt) {
