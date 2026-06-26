@@ -2,12 +2,18 @@ package com.test.backend.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.test.backend.domain.entity.Todo;
+import com.test.backend.domain.entity.TodoPriority;
+import com.test.backend.domain.entity.User;
 import com.test.backend.repository.TodoRepository;
+import com.test.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithAnonymousUser;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -21,6 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@WithMockUser(username = "owner@example.com")
 class TodoApiIntegrationTest {
 
     @Autowired
@@ -32,13 +39,47 @@ class TodoApiIntegrationTest {
     @Autowired
     private TodoRepository todoRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
     @BeforeEach
     void cleanUp() {
         todoRepository.deleteAll();
+        userRepository.deleteAll();
+        saveUser("owner@example.com", "Owner");
+        saveUser("other@example.com", "Other");
     }
 
     @Test
-    void supportsPublicCrudFlow() throws Exception {
+    @WithAnonymousUser
+    void rejectsUnauthenticatedTodoRequests() throws Exception {
+        mockMvc.perform(get("/todos"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "other@example.com")
+    void isolatesTodosByAuthenticatedUser() throws Exception {
+        User owner = userRepository.findByEmail("owner@example.com").orElseThrow();
+        Todo ownerTodo = new Todo("소유자 할 일", null, null, TodoPriority.HIGH);
+        ownerTodo.assignOwner(owner);
+        todoRepository.save(ownerTodo);
+
+        mockMvc.perform(get("/todos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.total").value(0));
+
+        mockMvc.perform(patch("/todos/{id}", ownerTodo.getId())
+                        .contentType("application/json")
+                        .content("{\"completed\":true}"))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(delete("/todos/{id}", ownerTodo.getId()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void supportsAuthenticatedCrudFlow() throws Exception {
         MvcResult createResult = mockMvc.perform(post("/todos")
                         .contentType("application/json")
                         .content("""
@@ -134,6 +175,14 @@ class TodoApiIntegrationTest {
                                 {"title":"%s","priority":"%s"}
                                 """.formatted(title, priority)))
                 .andExpect(status().isCreated());
+    }
+
+    private User saveUser(String email, String name) {
+        User user = new User();
+        user.setEmail(email);
+        user.setName(name);
+        user.setPassword("password");
+        return userRepository.save(user);
     }
 
     private void createTodoWithDue(String title, String priority, String dueAt) throws Exception {

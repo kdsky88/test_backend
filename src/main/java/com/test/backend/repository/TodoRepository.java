@@ -1,9 +1,11 @@
 package com.test.backend.repository;
 
 import com.test.backend.domain.entity.Todo;
+import com.test.backend.domain.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -45,6 +47,37 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query(
             value = """
                     SELECT t FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    ORDER BY
+                        t.completed ASC,
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(t) FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    """
+    )
+    Page<Todo> findAllByOwnerIdOrder(
+            @Param("ownerId") Long ownerId,
+            @Param("sort") String sort,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
+    @Query(
+            value = """
+                    SELECT t FROM Todo t
                     WHERE t.completed = :completed
                     AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
                     ORDER BY
@@ -67,6 +100,40 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     """
     )
     Page<Todo> findByCompletedOrderByPriority(
+            @Param("completed") boolean completed,
+            @Param("sort") String sort,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
+    @Query(
+            value = """
+                    SELECT t FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND t.completed = :completed
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    ORDER BY
+                        t.completed ASC,
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(t) FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND t.completed = :completed
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    """
+    )
+    Page<Todo> findByOwnerIdAndCompletedOrder(
+            @Param("ownerId") Long ownerId,
             @Param("completed") boolean completed,
             @Param("sort") String sort,
             @Param("search") String search,
@@ -110,6 +177,43 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query(
             value = """
                     SELECT t FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND (:completed IS NULL OR t.completed = :completed)
+                    AND t.assignee = :assignee
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    ORDER BY
+                        t.completed ASC,
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(t) FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND (:completed IS NULL OR t.completed = :completed)
+                    AND t.assignee = :assignee
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    """
+    )
+    Page<Todo> findByOwnerIdAndAssigneeAndCompleted(
+            @Param("ownerId") Long ownerId,
+            @Param("completed") Boolean completed,
+            @Param("assignee") String assignee,
+            @Param("sort") String sort,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
+    @Query(
+            value = """
+                    SELECT t FROM Todo t
                     WHERE (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
                     AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
@@ -140,8 +244,47 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
             Pageable pageable
     );
 
+    @Query(
+            value = """
+                    SELECT t FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND (:completed IS NULL OR t.completed = :completed)
+                    AND (t.assignee IS NULL OR t.assignee = '')
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    ORDER BY
+                        t.completed ASC,
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(t) FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND (:completed IS NULL OR t.completed = :completed)
+                    AND (t.assignee IS NULL OR t.assignee = '')
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    """
+    )
+    Page<Todo> findByOwnerIdAndUnassignedAndCompleted(
+            @Param("ownerId") Long ownerId,
+            @Param("completed") Boolean completed,
+            @Param("sort") String sort,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
     @Query("SELECT DISTINCT t.assignee FROM Todo t WHERE t.assignee IS NOT NULL AND t.assignee <> '' ORDER BY t.assignee")
     List<String> findDistinctAssignees();
+
+    @Query("SELECT DISTINCT t.assignee FROM Todo t WHERE t.owner.id = :ownerId AND t.assignee IS NOT NULL AND t.assignee <> '' ORDER BY t.assignee")
+    List<String> findDistinctAssigneesByOwnerId(@Param("ownerId") Long ownerId);
 
     @Query("""
             SELECT t FROM Todo t
@@ -150,6 +293,19 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
             ORDER BY COALESCE(t.dueAt, t.startAt) ASC, t.id ASC
             """)
     List<Todo> findByDateRangeOverlap(@Param("start") OffsetDateTime start, @Param("end") OffsetDateTime end);
+
+    @Query("""
+            SELECT t FROM Todo t
+            WHERE t.owner.id = :ownerId
+            AND COALESCE(t.startAt, t.dueAt) < :end
+            AND COALESCE(t.dueAt, t.startAt) >= :start
+            ORDER BY COALESCE(t.dueAt, t.startAt) ASC, t.id ASC
+            """)
+    List<Todo> findByOwnerIdAndDateRangeOverlap(
+            @Param("ownerId") Long ownerId,
+            @Param("start") OffsetDateTime start,
+            @Param("end") OffsetDateTime end
+    );
 
     @Query(
             value = """
@@ -178,6 +334,43 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     """
     )
     Page<Todo> findByTagAndCompleted(
+            @Param("tag") String tag,
+            @Param("completed") Boolean completed,
+            @Param("sort") String sort,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
+    @Query(
+            value = """
+                    SELECT t FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND :tag MEMBER OF t.tags
+                    AND (:completed IS NULL OR t.completed = :completed)
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    ORDER BY
+                        t.completed ASC,
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(t) FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND :tag MEMBER OF t.tags
+                    AND (:completed IS NULL OR t.completed = :completed)
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    """
+    )
+    Page<Todo> findByOwnerIdAndTagAndCompleted(
+            @Param("ownerId") Long ownerId,
             @Param("tag") String tag,
             @Param("completed") Boolean completed,
             @Param("sort") String sort,
@@ -224,6 +417,45 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query(
             value = """
                     SELECT t FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND :tag MEMBER OF t.tags
+                    AND (:completed IS NULL OR t.completed = :completed)
+                    AND (t.assignee IS NULL OR t.assignee = '')
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    ORDER BY
+                        t.completed ASC,
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(t) FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND :tag MEMBER OF t.tags
+                    AND (:completed IS NULL OR t.completed = :completed)
+                    AND (t.assignee IS NULL OR t.assignee = '')
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    """
+    )
+    Page<Todo> findByOwnerIdAndTagAndUnassignedAndCompleted(
+            @Param("ownerId") Long ownerId,
+            @Param("tag") String tag,
+            @Param("completed") Boolean completed,
+            @Param("sort") String sort,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
+    @Query(
+            value = """
+                    SELECT t FROM Todo t
                     WHERE :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
@@ -258,14 +490,79 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
             Pageable pageable
     );
 
+    @Query(
+            value = """
+                    SELECT t FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND :tag MEMBER OF t.tags
+                    AND (:completed IS NULL OR t.completed = :completed)
+                    AND t.assignee = :assignee
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    ORDER BY
+                        t.completed ASC,
+                        CASE WHEN :sort = 'DUE' AND t.dueAt IS NULL THEN 1 ELSE 0 END ASC,
+                        CASE WHEN :sort = 'DUE' THEN t.dueAt END ASC,
+                        CASE WHEN :sort = 'PRIORITY' THEN
+                            CASE t.priority
+                                WHEN com.test.backend.domain.entity.TodoPriority.HIGH THEN 1
+                                WHEN com.test.backend.domain.entity.TodoPriority.MEDIUM THEN 2
+                                WHEN com.test.backend.domain.entity.TodoPriority.LOW THEN 3
+                            END
+                        END ASC,
+                        t.createdAt DESC, t.id DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(t) FROM Todo t
+                    WHERE t.owner.id = :ownerId
+                    AND :tag MEMBER OF t.tags
+                    AND (:completed IS NULL OR t.completed = :completed)
+                    AND t.assignee = :assignee
+                    AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')))
+                    """
+    )
+    Page<Todo> findByOwnerIdAndTagAndAssigneeAndCompleted(
+            @Param("ownerId") Long ownerId,
+            @Param("tag") String tag,
+            @Param("completed") Boolean completed,
+            @Param("assignee") String assignee,
+            @Param("sort") String sort,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
     @Query("SELECT DISTINCT tag FROM Todo t JOIN t.tags tag ORDER BY tag")
     List<String> findDistinctTags();
 
+    @Query("SELECT DISTINCT tag FROM Todo t JOIN t.tags tag WHERE t.owner.id = :ownerId ORDER BY tag")
+    List<String> findDistinctTagsByOwnerId(@Param("ownerId") Long ownerId);
+
     long countByCompleted(boolean completed);
+
+    long countByOwnerId(Long ownerId);
+
+    long countByOwnerIdAndCompleted(Long ownerId, boolean completed);
 
     @Query("SELECT COUNT(t) FROM Todo t WHERE t.completed = false AND t.dueAt < :now")
     long countOverdue(@Param("now") OffsetDateTime now);
 
+    @Query("SELECT COUNT(t) FROM Todo t WHERE t.owner.id = :ownerId AND t.completed = false AND t.dueAt < :now")
+    long countOverdueByOwnerId(@Param("ownerId") Long ownerId, @Param("now") OffsetDateTime now);
+
     @Query("SELECT COUNT(t) FROM Todo t WHERE t.completed = false AND t.dueAt >= :start AND t.dueAt < :end")
     long countDueBetween(@Param("start") OffsetDateTime start, @Param("end") OffsetDateTime end);
+
+    @Query("SELECT COUNT(t) FROM Todo t WHERE t.owner.id = :ownerId AND t.completed = false AND t.dueAt >= :start AND t.dueAt < :end")
+    long countDueBetweenByOwnerId(
+            @Param("ownerId") Long ownerId,
+            @Param("start") OffsetDateTime start,
+            @Param("end") OffsetDateTime end
+    );
+
+    java.util.Optional<Todo> findByIdAndOwnerId(String id, Long ownerId);
+
+    long countByOwnerIsNull();
+
+    @Modifying
+    @Query("UPDATE Todo t SET t.owner = :owner WHERE t.owner IS NULL")
+    int assignOwnerToUnowned(@Param("owner") User owner);
 }

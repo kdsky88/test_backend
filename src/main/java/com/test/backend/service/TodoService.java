@@ -3,6 +3,7 @@ package com.test.backend.service;
 import com.test.backend.domain.entity.Todo;
 import com.test.backend.domain.entity.TodoPriority;
 import com.test.backend.domain.entity.TodoRecurrence;
+import com.test.backend.domain.entity.User;
 import com.test.backend.dto.request.CreateTodoRequest;
 import com.test.backend.dto.request.UpdateTodoRequest;
 import com.test.backend.dto.response.ApiResponse;
@@ -10,12 +11,15 @@ import com.test.backend.dto.response.TodoListResponse;
 import com.test.backend.dto.response.TodoResponse;
 import com.test.backend.exception.TodoApiException;
 import com.test.backend.repository.TodoRepository;
-import lombok.RequiredArgsConstructor;
+import com.test.backend.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.test.backend.dto.response.CalendarResponse;
 import com.test.backend.dto.response.TodoStats;
@@ -30,7 +34,6 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-@RequiredArgsConstructor
 public class TodoService {
 
     private static final String UNASSIGNED_TOKEN = "@unassigned";
@@ -39,6 +42,17 @@ public class TodoService {
     private static final int TAG_MAX_LENGTH = 20;
 
     private final TodoRepository todoRepository;
+    private final UserRepository userRepository;
+
+    public TodoService(TodoRepository todoRepository) {
+        this(todoRepository, null);
+    }
+
+    @Autowired
+    public TodoService(TodoRepository todoRepository, UserRepository userRepository) {
+        this.todoRepository = todoRepository;
+        this.userRepository = userRepository;
+    }
 
     @Transactional(readOnly = true)
     public TodoListResponse getTodos(String status, int page, int limit, String assignee, String tag, String sort, boolean hideCompleted, String search) {
@@ -48,6 +62,7 @@ public class TodoService {
         String sortToken = normalizeSort(sort);
         String searchTerm = normalizeString(search);
         PageRequest pageable = PageRequest.of(page - 1, limit);
+        Long ownerId = currentOwnerId();
 
         Boolean completed = switch (todoStatus) {
             case ALL -> null;
@@ -61,21 +76,35 @@ public class TodoService {
         Page<Todo> todoPage;
         if (normalizedTag != null) {
             if (normalizedAssignee == null) {
-                todoPage = todoRepository.findByTagAndCompleted(normalizedTag, completed, sortToken, searchTerm, pageable);
+                todoPage = ownerId == null
+                        ? todoRepository.findByTagAndCompleted(normalizedTag, completed, sortToken, searchTerm, pageable)
+                        : todoRepository.findByOwnerIdAndTagAndCompleted(ownerId, normalizedTag, completed, sortToken, searchTerm, pageable);
             } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
-                todoPage = todoRepository.findByTagAndUnassignedAndCompleted(normalizedTag, completed, sortToken, searchTerm, pageable);
+                todoPage = ownerId == null
+                        ? todoRepository.findByTagAndUnassignedAndCompleted(normalizedTag, completed, sortToken, searchTerm, pageable)
+                        : todoRepository.findByOwnerIdAndTagAndUnassignedAndCompleted(ownerId, normalizedTag, completed, sortToken, searchTerm, pageable);
             } else {
-                todoPage = todoRepository.findByTagAndAssigneeAndCompleted(normalizedTag, completed, normalizedAssignee, sortToken, searchTerm, pageable);
+                todoPage = ownerId == null
+                        ? todoRepository.findByTagAndAssigneeAndCompleted(normalizedTag, completed, normalizedAssignee, sortToken, searchTerm, pageable)
+                        : todoRepository.findByOwnerIdAndTagAndAssigneeAndCompleted(ownerId, normalizedTag, completed, normalizedAssignee, sortToken, searchTerm, pageable);
             }
         } else {
             if (normalizedAssignee == null) {
                 todoPage = (completed == null)
-                        ? todoRepository.findAllByPriorityOrder(sortToken, searchTerm, pageable)
-                        : todoRepository.findByCompletedOrderByPriority(completed, sortToken, searchTerm, pageable);
+                        ? (ownerId == null
+                                ? todoRepository.findAllByPriorityOrder(sortToken, searchTerm, pageable)
+                                : todoRepository.findAllByOwnerIdOrder(ownerId, sortToken, searchTerm, pageable))
+                        : (ownerId == null
+                                ? todoRepository.findByCompletedOrderByPriority(completed, sortToken, searchTerm, pageable)
+                                : todoRepository.findByOwnerIdAndCompletedOrder(ownerId, completed, sortToken, searchTerm, pageable));
             } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
-                todoPage = todoRepository.findByUnassignedAndCompleted(completed, sortToken, searchTerm, pageable);
+                todoPage = ownerId == null
+                        ? todoRepository.findByUnassignedAndCompleted(completed, sortToken, searchTerm, pageable)
+                        : todoRepository.findByOwnerIdAndUnassignedAndCompleted(ownerId, completed, sortToken, searchTerm, pageable);
             } else {
-                todoPage = todoRepository.findByAssigneeAndCompleted(completed, normalizedAssignee, sortToken, searchTerm, pageable);
+                todoPage = ownerId == null
+                        ? todoRepository.findByAssigneeAndCompleted(completed, normalizedAssignee, sortToken, searchTerm, pageable)
+                        : todoRepository.findByOwnerIdAndAssigneeAndCompleted(ownerId, completed, normalizedAssignee, sortToken, searchTerm, pageable);
             }
         }
 
@@ -90,22 +119,35 @@ public class TodoService {
         OffsetDateTime startOfToday = today.atStartOfDay(KST).toOffsetDateTime();
         OffsetDateTime endOfToday = today.plusDays(1).atStartOfDay(KST).toOffsetDateTime();
 
-        long total = todoRepository.count();
-        long completed = todoRepository.countByCompleted(true);
-        long overdue = todoRepository.countOverdue(now);
-        long dueToday = todoRepository.countDueBetween(startOfToday, endOfToday);
+        Long ownerId = currentOwnerId();
+        long total = ownerId == null ? todoRepository.count() : todoRepository.countByOwnerId(ownerId);
+        long completed = ownerId == null
+                ? todoRepository.countByCompleted(true)
+                : todoRepository.countByOwnerIdAndCompleted(ownerId, true);
+        long overdue = ownerId == null
+                ? todoRepository.countOverdue(now)
+                : todoRepository.countOverdueByOwnerId(ownerId, now);
+        long dueToday = ownerId == null
+                ? todoRepository.countDueBetween(startOfToday, endOfToday)
+                : todoRepository.countDueBetweenByOwnerId(ownerId, startOfToday, endOfToday);
         return new ApiResponse<>(
                 new TodoStats(total, completed, total - completed, overdue, dueToday));
     }
 
     @Transactional(readOnly = true)
     public ApiResponse<List<String>> getAssignees() {
-        return new ApiResponse<>(todoRepository.findDistinctAssignees());
+        Long ownerId = currentOwnerId();
+        return new ApiResponse<>(ownerId == null
+                ? todoRepository.findDistinctAssignees()
+                : todoRepository.findDistinctAssigneesByOwnerId(ownerId));
     }
 
     @Transactional(readOnly = true)
     public ApiResponse<List<String>> getTags() {
-        return new ApiResponse<>(todoRepository.findDistinctTags());
+        Long ownerId = currentOwnerId();
+        return new ApiResponse<>(ownerId == null
+                ? todoRepository.findDistinctTags()
+                : todoRepository.findDistinctTagsByOwnerId(ownerId));
     }
 
     @Transactional
@@ -134,6 +176,7 @@ public class TodoService {
                 priority,
                 assignee
         );
+        currentUser().ifPresent(todo::assignOwner);
         todo.updateStartAt(request.getStartAt());
         todo.updateRecurrence(parseRecurrence(request.getRecurrence()));
         if (tags != null) {
@@ -250,6 +293,7 @@ public class TodoService {
                 source.getPriority(),
                 source.getAssignee()
         );
+        next.assignOwner(source.getOwner());
         next.updateStartAt(shiftDate(source.getStartAt(), source.getRecurrence()));
         next.updateRecurrence(source.getRecurrence());
         source.getTags().forEach(next::addTag);
@@ -288,7 +332,11 @@ public class TodoService {
 
         // 시작일~마감일 사이의 모든 날짜에 배치(월 범위로 클램프). 한쪽만 있으면 그 하루만.
         Map<String, List<TodoResponse>> grouped = new LinkedHashMap<>();
-        for (Todo todo : todoRepository.findByDateRangeOverlap(start, end)) {
+        Long ownerId = currentOwnerId();
+        List<Todo> todos = ownerId == null
+                ? todoRepository.findByDateRangeOverlap(start, end)
+                : todoRepository.findByOwnerIdAndDateRangeOverlap(ownerId, start, end);
+        for (Todo todo : todos) {
             OffsetDateTime rangeStart = todo.getStartAt() != null ? todo.getStartAt() : todo.getDueAt();
             OffsetDateTime rangeEnd = todo.getDueAt() != null ? todo.getDueAt() : todo.getStartAt();
             LocalDate from = rangeStart.atZoneSameInstant(KST).toLocalDate();
@@ -304,12 +352,40 @@ public class TodoService {
     }
 
     private Todo findTodo(String id) {
-        return todoRepository.findById(id)
+        Long ownerId = currentOwnerId();
+        return (ownerId == null
+                ? todoRepository.findById(id)
+                : todoRepository.findByIdAndOwnerId(id, ownerId))
                 .orElseThrow(() -> new TodoApiException(
                         HttpStatus.NOT_FOUND,
                         "TODO_NOT_FOUND",
                         "Todo를 찾을 수 없습니다."
                 ));
+    }
+
+    private Long currentOwnerId() {
+        return currentUser().map(User::getId).orElse(null);
+    }
+
+    private java.util.Optional<User> currentUser() {
+        if (userRepository == null) {
+            return java.util.Optional.empty();
+        }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
+            throw unauthenticated();
+        }
+        return java.util.Optional.of(userRepository.findByEmail(authentication.getName())
+                .orElseThrow(this::unauthenticated));
+    }
+
+    private TodoApiException unauthenticated() {
+        return new TodoApiException(
+                HttpStatus.UNAUTHORIZED,
+                "UNAUTHENTICATED",
+                "인증이 필요합니다."
+        );
     }
 
     private TodoStatus validateListRequest(String status, int page, int limit) {
