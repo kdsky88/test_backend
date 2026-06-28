@@ -5,7 +5,7 @@ import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.MariaDBContainer;
+import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -101,13 +101,13 @@ class TodoOwnerFlywayMigrationTest {
     }
 
     @Test
-    void mariaDbMigrationBackfillsOwnerAndRequiresOwnerColumn() throws Exception {
+    void postgresMigrationBackfillsOwnerAndRequiresOwnerColumn() throws Exception {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for the MariaDB migration integration test."
+                "Docker is required for the Postgres migration integration test."
         );
 
-        try (MariaDBContainer<?> maria = new MariaDBContainer<>("mariadb:11.4")) {
+        try (PostgreSQLContainer<?> maria = new PostgreSQLContainer<>("postgres:16")) {
             maria.start();
             migrate(maria.getJdbcUrl(), "1", Map.of(), maria.getUsername(), maria.getPassword());
 
@@ -144,7 +144,7 @@ class TodoOwnerFlywayMigrationTest {
 
     private String dbUrl() {
         return "jdbc:h2:mem:" + UUID.randomUUID()
-                + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1";
+                + ";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1";
     }
 
     private void migrate(String url, String target, Map<String, String> placeholders) {
