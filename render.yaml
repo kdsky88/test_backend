@@ -1,0 +1,40 @@
+# Render Blueprint: 무료 Postgres + Docker 웹 서비스
+# Render 대시보드 → New → Blueprint → 이 레포 선택하면 자동 생성됨.
+databases:
+  - name: test-db
+    plan: free
+    databaseName: testdb
+    user: testuser
+
+services:
+  - type: web
+    name: test-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: test-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: test-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: test-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: test-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: test-db
+          property: password
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TODO_LEGACY_OWNER_EMAIL
+        value: ""

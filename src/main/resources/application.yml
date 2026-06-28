@@ -1,9 +1,9 @@
 spring:
   datasource:
-    url: jdbc:mariadb://localhost:3306/testdb
-    driver-class-name: org.mariadb.jdbc.Driver
-    username: testuser
-    password: testpassword
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:testdb}
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USERNAME:testuser}
+    password: ${DB_PASSWORD:testpassword}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -19,7 +19,7 @@ spring:
       legacyOwnerEmail: ${TODO_LEGACY_OWNER_EMAIL:}
 
 server:
-  port: 8080
+  port: ${PORT:8080}
 
 jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hs256}

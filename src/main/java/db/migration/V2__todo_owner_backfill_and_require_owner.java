@@ -17,7 +17,14 @@ public class V2__todo_owner_backfill_and_require_owner extends BaseJavaMigration
     public void migrate(Context context) throws Exception {
         Connection connection = context.getConnection();
         String product = connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT);
-        Dialect dialect = product.contains("h2") ? Dialect.H2 : Dialect.MARIA;
+        Dialect dialect;
+        if (product.contains("postgres")) {
+            dialect = Dialect.POSTGRES;
+        } else if (product.contains("h2")) {
+            dialect = Dialect.H2;
+        } else {
+            dialect = Dialect.MARIA;
+        }
 
         if (!columnExists(connection, "todos", "owner_id")) {
             execute(connection, "ALTER TABLE todos ADD COLUMN owner_id BIGINT");
@@ -70,10 +77,11 @@ public class V2__todo_owner_backfill_and_require_owner extends BaseJavaMigration
     }
 
     private void makeOwnerIdNotNull(Connection connection, Dialect dialect) throws SQLException {
-        if (dialect == Dialect.H2) {
-            execute(connection, "ALTER TABLE todos ALTER COLUMN owner_id SET NOT NULL");
-        } else {
+        // H2/Postgres: 표준 SET NOT NULL. MariaDB/MySQL만 MODIFY 문법.
+        if (dialect == Dialect.MARIA) {
             execute(connection, "ALTER TABLE todos MODIFY owner_id BIGINT NOT NULL");
+        } else {
+            execute(connection, "ALTER TABLE todos ALTER COLUMN owner_id SET NOT NULL");
         }
     }
 
@@ -134,6 +142,6 @@ public class V2__todo_owner_backfill_and_require_owner extends BaseJavaMigration
     }
 
     private enum Dialect {
-        H2, MARIA
+        H2, MARIA, POSTGRES
     }
 }
