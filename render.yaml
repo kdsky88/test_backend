@@ -38,3 +38,6 @@ services:
         generateValue: true
       - key: TODO_LEGACY_OWNER_EMAIL
         value: ""
+      # refresh 토큰 수명 90일(=90*86400000ms) → 재로그인 거의 불필요
+      - key: JWT_REFRESH_TOKEN_EXPIRATION
+        value: "7776000000"
