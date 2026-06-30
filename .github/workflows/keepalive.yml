@@ -1,0 +1,16 @@
+name: keep-alive
+
+# Render 무료 웹서비스가 15분 유휴 시 잠드는 것 방지: 주기적으로 health 핑.
+# (GitHub cron은 지연될 수 있음 → 더 확실하려면 UptimeRobot 병행 권장)
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ping health
+        run: |
+          curl -fsS --max-time 120 https://test-backend-83yt.onrender.com/api/health || true
