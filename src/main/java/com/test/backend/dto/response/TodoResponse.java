@@ -23,8 +23,13 @@ public record TodoResponse(
         Instant updatedAt,
         String assignee,
         List<String> tags,
-        TodoRecurrence recurrence
+        TodoRecurrence recurrence,
+        String ownerEmail,
+        String assignedToEmail,
+        String assignedToName
 ) {
+    // ponytail: owner/assignedTo LAZY 접근으로 목록당 N+1 발생 — 소규모라 허용,
+    // 커지면 fetch join으로 최적화.
     public TodoResponse(Todo todo) {
         this(
                 todo.getId(),
@@ -40,7 +45,10 @@ public record TodoResponse(
                 todo.getUpdatedAt(),
                 todo.getAssignee(),
                 todo.getTags().stream().sorted().collect(Collectors.toList()),
-                todo.getRecurrence()
+                todo.getRecurrence(),
+                todo.getOwner() == null ? null : todo.getOwner().getEmail(),
+                todo.getAssignedTo() == null ? null : todo.getAssignedTo().getEmail(),
+                todo.getAssignedTo() == null ? null : todo.getAssignedTo().getName()
         );
     }
 }

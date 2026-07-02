@@ -79,7 +79,10 @@ class TodoControllerTest {
                 null,
                 null,
                 List.of(),
-                TodoRecurrence.NONE
+                TodoRecurrence.NONE,
+                "owner@example.com",
+                null,
+                null
         );
         given(todoService.createTodo(any())).willReturn(new ApiResponse<>(todo));
 

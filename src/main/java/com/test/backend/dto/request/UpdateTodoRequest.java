@@ -37,6 +37,9 @@ public class UpdateTodoRequest {
     private boolean recurrencePresent;
     private String recurrence;
 
+    private boolean assignedToEmailPresent;
+    private String assignedToEmail;
+
     @JsonSetter("title")
     public void setTitle(String title) {
         this.titlePresent = true;
@@ -91,10 +94,24 @@ public class UpdateTodoRequest {
         this.recurrence = recurrence;
     }
 
+    @JsonSetter("assignedToEmail")
+    public void setAssignedToEmail(String assignedToEmail) {
+        this.assignedToEmailPresent = true;
+        this.assignedToEmail = assignedToEmail;
+    }
+
     public boolean hasAnyField() {
         return titlePresent || descriptionPresent || notePresent
                 || startAtPresent || dueAtPresent
                 || completedPresent || priorityPresent || assigneePresent
-                || recurrencePresent;
+                || recurrencePresent || assignedToEmailPresent;
+    }
+
+    /** completed 외 다른 필드 수정이 있는지(담당자는 완료만 가능하므로 판별용). */
+    public boolean hasNonCompletedField() {
+        return titlePresent || descriptionPresent || notePresent
+                || startAtPresent || dueAtPresent
+                || priorityPresent || assigneePresent
+                || recurrencePresent || assignedToEmailPresent;
     }
 }

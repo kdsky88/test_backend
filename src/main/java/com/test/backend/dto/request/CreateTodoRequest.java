@@ -19,6 +19,7 @@ public class CreateTodoRequest {
     private String assignee;
     private List<String> tags;
     private String recurrence;
+    private String assignedToEmail;
 
     private boolean priorityPresent;
     private String priority;
