@@ -1,5 +1,6 @@
 package com.test.backend.controller;
 
+import com.test.backend.dto.request.ChangePasswordRequest;
 import com.test.backend.dto.request.LoginRequest;
 import com.test.backend.dto.request.RegisterRequest;
 import com.test.backend.dto.response.TokenResponse;
@@ -8,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -34,5 +36,12 @@ public class AuthController {
             @RequestHeader(value = "Authorization", required = false) String authorization) {
         TokenResponse response = authService.refresh(authorization);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/password")
+    public ResponseEntity<Void> changePassword(
+            Authentication authentication, @Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(authentication.getName(), request);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -1,6 +1,7 @@
 package com.test.backend.service;
 
 import com.test.backend.domain.entity.User;
+import com.test.backend.dto.request.ChangePasswordRequest;
 import com.test.backend.dto.request.LoginRequest;
 import com.test.backend.dto.request.RegisterRequest;
 import com.test.backend.dto.response.TokenResponse;
@@ -56,6 +57,21 @@ public class AuthService {
         userRepository.save(user);
 
         return new TokenResponse(accessToken, refreshToken);
+    }
+
+    @Transactional
+    public void changePassword(String email, ChangePasswordRequest request) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
+
+        // 400: 잘못된 현재 비밀번호는 인증 실패(401)가 아니어야 함. 401이면 프론트 apiClient가
+        // refresh를 돌려 토큰만 회전시키고 재시도 → 무한 churn. 검증 실패로 취급.
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "현재 비밀번호가 올바르지 않습니다.");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
     }
 
     @Transactional
