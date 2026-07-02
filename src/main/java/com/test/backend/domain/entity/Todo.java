@@ -30,7 +30,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "todos", indexes = {
     @Index(name = "idx_todos_assignee", columnList = "assignee"),
-    @Index(name = "idx_todos_owner", columnList = "owner_id")
+    @Index(name = "idx_todos_owner", columnList = "owner_id"),
+    @Index(name = "idx_todos_assigned_to", columnList = "assigned_to_id")
 })
 @Getter
 @NoArgsConstructor
@@ -44,6 +45,11 @@ public class Todo {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
+
+    // 공유 대상(담당자). 소유자/담당자 모두 목록에서 보이고 완료 가능.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_to_id")
+    private User assignedTo;
 
     @Column(nullable = false, length = 100)
     private String title;
@@ -166,6 +172,10 @@ public class Todo {
 
     public void assignOwner(User owner) {
         this.owner = owner;
+    }
+
+    public void assignTo(User user) {
+        this.assignedTo = user;
     }
 
     public void updateCompleted(boolean completed, Instant changedAt) {

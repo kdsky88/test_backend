@@ -177,6 +177,7 @@ public class TodoService {
                 assignee
         );
         currentUser().ifPresent(todo::assignOwner);
+        todo.assignTo(resolveAssignedTo(request.getAssignedToEmail()));
         todo.updateStartAt(request.getStartAt());
         todo.updateRecurrence(parseRecurrence(request.getRecurrence()));
         if (tags != null) {
@@ -229,7 +230,16 @@ public class TodoService {
     @Transactional
     public ApiResponse<TodoResponse> updateTodo(String id, UpdateTodoRequest request) {
         validateUpdateRequest(request);
-        Todo todo = findTodo(id);
+        // 소유자 또는 담당자만 접근. 담당자는 '완료'만 변경 가능.
+        Long userId = currentUser().map(User::getId).orElse(null);
+        Todo todo = (userId == null)
+                ? todoRepository.findById(id).orElseThrow(this::todoNotFound)
+                : todoRepository.findByIdVisibleTo(id, userId).orElseThrow(this::todoNotFound);
+        boolean isOwner = userId == null || todo.getOwner().getId().equals(userId);
+        if (!isOwner && request.hasNonCompletedField()) {
+            throw new TodoApiException(
+                    HttpStatus.FORBIDDEN, "FORBIDDEN", "담당자는 완료 상태만 변경할 수 있습니다.");
+        }
 
         OffsetDateTime effectiveStart = request.isStartAtPresent() ? request.getStartAt() : todo.getStartAt();
         OffsetDateTime effectiveDue = request.isDueAtPresent() ? request.getDueAt() : todo.getDueAt();
@@ -274,6 +284,10 @@ public class TodoService {
         if (request.isAssigneePresent()) {
             todo.updateAssignee(normalizeAssigneeForUpdate(request.getAssignee()));
         }
+        if (request.isAssignedToEmailPresent()) {
+            // 여기까지 온 건 소유자(위에서 담당자의 비-완료 변경 차단). 담당자 재배정.
+            todo.assignTo(resolveAssignedTo(request.getAssignedToEmail()));
+        }
         // saveAndFlush로 @LastModifiedDate가 DB에 반영된 값을 응답에 포함
         Todo saved = todoRepository.saveAndFlush(todo);
         // 반복 항목을 '완료'로 전환하면 다음 주기 항목을 자동 생성
@@ -294,10 +308,27 @@ public class TodoService {
                 source.getAssignee()
         );
         next.assignOwner(source.getOwner());
+        next.assignTo(source.getAssignedTo());
         next.updateStartAt(shiftDate(source.getStartAt(), source.getRecurrence()));
         next.updateRecurrence(source.getRecurrence());
         source.getTags().forEach(next::addTag);
         todoRepository.save(next);
+    }
+
+    /** 담당자 이메일 → User. 빈 값이면 null(배정 해제). 없는 이메일이면 검증 에러. */
+    private User resolveAssignedTo(String email) {
+        if (email == null || email.isBlank()) return null;
+        if (userRepository == null) return null; // 유저 저장소 없는 테스트 경로
+        return userRepository.findByEmail(email.strip()).orElseThrow(() -> {
+            Map<String, String> f = new LinkedHashMap<>();
+            f.put("assignedToEmail", "해당 이메일의 사용자가 없습니다.");
+            return validationError(f);
+        });
+    }
+
+    private TodoApiException todoNotFound() {
+        return new TodoApiException(
+                HttpStatus.NOT_FOUND, "TODO_NOT_FOUND", "Todo를 찾을 수 없습니다.");
     }
 
     private OffsetDateTime shiftDate(OffsetDateTime base, TodoRecurrence recurrence) {

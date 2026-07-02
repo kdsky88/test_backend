@@ -47,7 +47,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query(
             value = """
                     SELECT t FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
                     ORDER BY
                         t.completed ASC,
@@ -64,7 +64,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     """,
             countQuery = """
                     SELECT COUNT(t) FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
                     """
     )
@@ -109,7 +109,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query(
             value = """
                     SELECT t FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND t.completed = :completed
                     AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
                     ORDER BY
@@ -127,7 +127,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     """,
             countQuery = """
                     SELECT COUNT(t) FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND t.completed = :completed
                     AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
                     """
@@ -177,7 +177,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query(
             value = """
                     SELECT t FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
                     AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
@@ -196,7 +196,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     """,
             countQuery = """
                     SELECT COUNT(t) FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
                     AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
@@ -247,7 +247,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query(
             value = """
                     SELECT t FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
                     AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
@@ -266,7 +266,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     """,
             countQuery = """
                     SELECT COUNT(t) FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
                     AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
@@ -283,7 +283,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query("SELECT DISTINCT t.assignee FROM Todo t WHERE t.assignee IS NOT NULL AND t.assignee <> '' ORDER BY t.assignee")
     List<String> findDistinctAssignees();
 
-    @Query("SELECT DISTINCT t.assignee FROM Todo t WHERE t.owner.id = :ownerId AND t.assignee IS NOT NULL AND t.assignee <> '' ORDER BY t.assignee")
+    @Query("SELECT DISTINCT t.assignee FROM Todo t WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId) AND t.assignee IS NOT NULL AND t.assignee <> '' ORDER BY t.assignee")
     List<String> findDistinctAssigneesByOwnerId(@Param("ownerId") Long ownerId);
 
     @Query("""
@@ -296,7 +296,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
 
     @Query("""
             SELECT t FROM Todo t
-            WHERE t.owner.id = :ownerId
+            WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
             AND COALESCE(t.startAt, t.dueAt) < :end
             AND COALESCE(t.dueAt, t.startAt) >= :start
             ORDER BY COALESCE(t.dueAt, t.startAt) ASC, t.id ASC
@@ -344,7 +344,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query(
             value = """
                     SELECT t FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
@@ -363,7 +363,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     """,
             countQuery = """
                     SELECT COUNT(t) FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND (:search IS NULL OR LOWER(t.title) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
@@ -417,7 +417,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query(
             value = """
                     SELECT t FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
@@ -437,7 +437,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     """,
             countQuery = """
                     SELECT COUNT(t) FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND (t.assignee IS NULL OR t.assignee = '')
@@ -493,7 +493,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query(
             value = """
                     SELECT t FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
@@ -513,7 +513,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
                     """,
             countQuery = """
                     SELECT COUNT(t) FROM Todo t
-                    WHERE t.owner.id = :ownerId
+                    WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId)
                     AND :tag MEMBER OF t.tags
                     AND (:completed IS NULL OR t.completed = :completed)
                     AND t.assignee = :assignee
@@ -533,7 +533,7 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query("SELECT DISTINCT tag FROM Todo t JOIN t.tags tag ORDER BY tag")
     List<String> findDistinctTags();
 
-    @Query("SELECT DISTINCT tag FROM Todo t JOIN t.tags tag WHERE t.owner.id = :ownerId ORDER BY tag")
+    @Query("SELECT DISTINCT tag FROM Todo t JOIN t.tags tag WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId) ORDER BY tag")
     List<String> findDistinctTagsByOwnerId(@Param("ownerId") Long ownerId);
 
     long countByCompleted(boolean completed);
@@ -545,13 +545,13 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query("SELECT COUNT(t) FROM Todo t WHERE t.completed = false AND t.dueAt < :now")
     long countOverdue(@Param("now") OffsetDateTime now);
 
-    @Query("SELECT COUNT(t) FROM Todo t WHERE t.owner.id = :ownerId AND t.completed = false AND t.dueAt < :now")
+    @Query("SELECT COUNT(t) FROM Todo t WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId) AND t.completed = false AND t.dueAt < :now")
     long countOverdueByOwnerId(@Param("ownerId") Long ownerId, @Param("now") OffsetDateTime now);
 
     @Query("SELECT COUNT(t) FROM Todo t WHERE t.completed = false AND t.dueAt >= :start AND t.dueAt < :end")
     long countDueBetween(@Param("start") OffsetDateTime start, @Param("end") OffsetDateTime end);
 
-    @Query("SELECT COUNT(t) FROM Todo t WHERE t.owner.id = :ownerId AND t.completed = false AND t.dueAt >= :start AND t.dueAt < :end")
+    @Query("SELECT COUNT(t) FROM Todo t WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId) AND t.completed = false AND t.dueAt >= :start AND t.dueAt < :end")
     long countDueBetweenByOwnerId(
             @Param("ownerId") Long ownerId,
             @Param("start") OffsetDateTime start,
@@ -559,6 +559,10 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     );
 
     java.util.Optional<Todo> findByIdAndOwnerId(String id, Long ownerId);
+
+    // 소유자 또는 담당자에게 보이는 todo (담당자 완료 허용용)
+    @Query("SELECT t FROM Todo t WHERE t.id = :id AND (t.owner.id = :userId OR t.assignedTo.id = :userId)")
+    java.util.Optional<Todo> findByIdVisibleTo(@Param("id") String id, @Param("userId") Long userId);
 
     long countByOwnerIsNull();
 

@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.hamcrest.Matchers.startsWith;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -357,5 +358,50 @@ class TodoApiIntegrationTest {
                 .andExpect(jsonPath("$.data.active").value(2))
                 .andExpect(jsonPath("$.data.overdue").value(1))
                 .andExpect(jsonPath("$.data.dueToday").value(0));
+    }
+
+    @Test
+    void sharedTodoVisibleToAssignee_whoCanCompleteButNotEdit() throws Exception {
+        // owner가 other에게 배정해 생성
+        MvcResult created = mockMvc.perform(post("/todos").with(user("owner@example.com"))
+                        .contentType("application/json")
+                        .content("""
+                                {"title":"공유 할 일","priority":"HIGH","assignedToEmail":"other@example.com"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.assignedToEmail").value("other@example.com"))
+                .andReturn();
+        String id = objectMapper.readTree(created.getResponse().getContentAsString())
+                .path("data").path("id").asText();
+
+        // 담당자(other) 목록에 보임
+        mockMvc.perform(get("/todos").with(user("other@example.com")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.total").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(id));
+
+        // 담당자는 완료 가능
+        mockMvc.perform(patch("/todos/" + id).with(user("other@example.com"))
+                        .contentType("application/json").content("{\"completed\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.completed").value(true));
+
+        // 담당자는 제목 수정 불가(403)
+        mockMvc.perform(patch("/todos/" + id).with(user("other@example.com"))
+                        .contentType("application/json").content("{\"title\":\"바꿈\"}"))
+                .andExpect(status().isForbidden());
+
+        // 소유자는 수정 가능
+        mockMvc.perform(patch("/todos/" + id).with(user("owner@example.com"))
+                        .contentType("application/json").content("{\"title\":\"소유자 수정\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("소유자 수정"));
+
+        // 없는 이메일로 배정 시 검증 에러
+        mockMvc.perform(post("/todos").with(user("owner@example.com"))
+                        .contentType("application/json")
+                        .content("{\"title\":\"x\",\"assignedToEmail\":\"nobody@example.com\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields.assignedToEmail").exists());
     }
 }
