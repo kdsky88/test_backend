@@ -558,6 +558,16 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
             @Param("end") OffsetDateTime end
     );
 
+    @Query("SELECT COUNT(t) FROM Todo t WHERE t.completed = true AND t.completedAt >= :start AND t.completedAt < :end")
+    long countCompletedBetween(@Param("start") java.time.Instant start, @Param("end") java.time.Instant end);
+
+    @Query("SELECT COUNT(t) FROM Todo t WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId) AND t.completed = true AND t.completedAt >= :start AND t.completedAt < :end")
+    long countCompletedBetweenByOwnerId(
+            @Param("ownerId") Long ownerId,
+            @Param("start") java.time.Instant start,
+            @Param("end") java.time.Instant end
+    );
+
     java.util.Optional<Todo> findByIdAndOwnerId(String id, Long ownerId);
 
     // 소유자 또는 담당자에게 보이는 todo (담당자 완료 허용용)

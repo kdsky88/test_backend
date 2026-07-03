@@ -130,8 +130,23 @@ public class TodoService {
         long dueToday = ownerId == null
                 ? todoRepository.countDueBetween(startOfToday, endOfToday)
                 : todoRepository.countDueBetweenByOwnerId(ownerId, startOfToday, endOfToday);
-        return new ApiResponse<>(
-                new TodoStats(total, completed, total - completed, overdue, dueToday));
+
+        // 완료 시각(completedAt, Instant) 기준 오늘/이번 주 완료 수. 주 시작은 달력과 맞춰 일요일.
+        java.time.Instant startOfTodayI = today.atStartOfDay(KST).toInstant();
+        java.time.Instant endOfTodayI = today.plusDays(1).atStartOfDay(KST).toInstant();
+        java.time.Instant startOfWeekI = today
+                .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.SUNDAY))
+                .atStartOfDay(KST).toInstant();
+        long completedToday = ownerId == null
+                ? todoRepository.countCompletedBetween(startOfTodayI, endOfTodayI)
+                : todoRepository.countCompletedBetweenByOwnerId(ownerId, startOfTodayI, endOfTodayI);
+        long completedThisWeek = ownerId == null
+                ? todoRepository.countCompletedBetween(startOfWeekI, endOfTodayI)
+                : todoRepository.countCompletedBetweenByOwnerId(ownerId, startOfWeekI, endOfTodayI);
+
+        return new ApiResponse<>(new TodoStats(
+                total, completed, total - completed, overdue, dueToday,
+                completedToday, completedThisWeek));
     }
 
     @Transactional(readOnly = true)
