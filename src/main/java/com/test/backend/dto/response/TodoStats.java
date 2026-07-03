@@ -5,5 +5,7 @@ public record TodoStats(
         long completed,
         long active,
         long overdue,
-        long dueToday
+        long dueToday,
+        long completedToday,
+        long completedThisWeek
 ) {}
