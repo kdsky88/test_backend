@@ -1,5 +1,7 @@
 package com.test.backend.dto.response;
 
+import java.util.List;
+
 public record TodoStats(
         long total,
         long completed,
@@ -8,5 +10,8 @@ public record TodoStats(
         long dueToday,
         long completedToday,
         long completedThisWeek,
-        long streakDays
+        long completedThisMonth,
+        long streakDays,
+        long longestStreak,
+        List<Long> last7Days // index 6 = 오늘, 0 = 6일 전
 ) {}

@@ -48,6 +48,13 @@ public class TodoController {
         return ResponseEntity.ok(todoService.getStats());
     }
 
+    @GetMapping("/completed")
+    public ResponseEntity<TodoListResponse> getCompletedHistory(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(todoService.getCompletedHistory(page, limit));
+    }
+
     @GetMapping("/tags")
     public ResponseEntity<ApiResponse<List<String>>> getTags() {
         return ResponseEntity.ok(todoService.getTags());

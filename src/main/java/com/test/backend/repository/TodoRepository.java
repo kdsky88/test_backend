@@ -578,6 +578,13 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
             @Param("floor") java.time.Instant floor
     );
 
+    // 완료 기록: 완료 시각 내림차순(가장 최근 완료가 위로). 목록 정렬(우선순위 등)과 별개 전용 쿼리.
+    @Query("SELECT t FROM Todo t WHERE t.completed = true ORDER BY t.completedAt DESC")
+    Page<Todo> findCompletedOrderByCompletedAtDesc(Pageable pageable);
+
+    @Query("SELECT t FROM Todo t WHERE t.completed = true AND (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId) ORDER BY t.completedAt DESC")
+    Page<Todo> findCompletedByOwnerOrderByCompletedAtDesc(@Param("ownerId") Long ownerId, Pageable pageable);
+
     java.util.Optional<Todo> findByIdAndOwnerId(String id, Long ownerId);
 
     // 소유자 또는 담당자에게 보이는 todo (담당자 완료 허용용)
