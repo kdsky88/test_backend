@@ -32,6 +32,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class TodoService {
@@ -144,9 +146,20 @@ public class TodoService {
                 ? todoRepository.countCompletedBetween(startOfWeekI, endOfTodayI)
                 : todoRepository.countCompletedBetweenByOwnerId(ownerId, startOfWeekI, endOfTodayI);
 
+        // 연속 완료(streak): 최근 400일 완료 시각을 KST 날짜로 묶어 오늘(없으면 어제)부터 연속 카운트.
+        // ponytail: 400일 창이라 그 이상 연속은 잘림 — 개인용엔 충분.
+        Instant streakFloor = today.minusDays(400).atStartOfDay(KST).toInstant();
+        List<Instant> completions = ownerId == null
+                ? todoRepository.findCompletedAtSince(streakFloor)
+                : todoRepository.findCompletedAtSinceByOwnerId(ownerId, streakFloor);
+        Set<LocalDate> completedDays = completions.stream()
+                .map(inst -> inst.atZone(KST).toLocalDate())
+                .collect(Collectors.toSet());
+        long streakDays = computeStreak(completedDays, today);
+
         return new ApiResponse<>(new TodoStats(
                 total, completed, total - completed, overdue, dueToday,
-                completedToday, completedThisWeek));
+                completedToday, completedThisWeek, streakDays));
     }
 
     @Transactional(readOnly = true)
@@ -646,6 +659,25 @@ public class TodoService {
     }
 
     /** 정렬 키를 쿼리에서 쓰는 토큰으로 정규화. 알 수 없는 값은 기본(PRIORITY). */
+    // 연속 완료 일수. 오늘 완료가 있으면 오늘부터, 없고 어제 있으면 어제부터(오늘 아직 안 한 것 유예)
+    // 하루씩 뒤로 가며 연속으로 완료가 있는 날을 센다. 둘 다 없으면 0. 순수 함수(테스트용).
+    static long computeStreak(Set<LocalDate> completedDays, LocalDate today) {
+        LocalDate cursor;
+        if (completedDays.contains(today)) {
+            cursor = today;
+        } else if (completedDays.contains(today.minusDays(1))) {
+            cursor = today.minusDays(1);
+        } else {
+            return 0;
+        }
+        long streak = 0;
+        while (completedDays.contains(cursor)) {
+            streak++;
+            cursor = cursor.minusDays(1);
+        }
+        return streak;
+    }
+
     private static String normalizeSort(String sort) {
         if (sort == null) return "PRIORITY";
         return switch (sort.trim().toLowerCase()) {
