@@ -43,4 +43,23 @@ class TodoStreakTest {
     void neitherTodayNorYesterday_zero() {
         assertThat(TodoService.computeStreak(Set.of(TODAY.minusDays(2)), TODAY)).isZero();
     }
+
+    @Test
+    void longest_emptyIsZero() {
+        assertThat(TodoService.computeLongestStreak(Set.of())).isZero();
+    }
+
+    @Test
+    void longest_singleDayIsOne() {
+        assertThat(TodoService.computeLongestStreak(Set.of(TODAY))).isEqualTo(1);
+    }
+
+    @Test
+    void longest_picksLongestRunNotCurrent() {
+        // 현재 연속은 2일(오늘,어제)이지만 과거에 3일 연속(4~6일 전)이 있으면 최고는 3
+        Set<LocalDate> days = Set.of(
+                TODAY, TODAY.minusDays(1),
+                TODAY.minusDays(4), TODAY.minusDays(5), TODAY.minusDays(6));
+        assertThat(TodoService.computeLongestStreak(days)).isEqualTo(3);
+    }
 }

@@ -146,20 +146,50 @@ public class TodoService {
                 ? todoRepository.countCompletedBetween(startOfWeekI, endOfTodayI)
                 : todoRepository.countCompletedBetweenByOwnerId(ownerId, startOfWeekI, endOfTodayI);
 
-        // 연속 완료(streak): 최근 400일 완료 시각을 KST 날짜로 묶어 오늘(없으면 어제)부터 연속 카운트.
-        // ponytail: 400일 창이라 그 이상 연속은 잘림 — 개인용엔 충분.
+        // 최근 400일 완료 시각을 한 번 가져와 streak/최장연속/이번달/주간추이를 모두 계산(추가 쿼리 없음).
+        // ponytail: 400일 창이라 그 이상 연속/추이는 잘림 — 개인용엔 충분.
         Instant streakFloor = today.minusDays(400).atStartOfDay(KST).toInstant();
         List<Instant> completions = ownerId == null
                 ? todoRepository.findCompletedAtSince(streakFloor)
                 : todoRepository.findCompletedAtSinceByOwnerId(ownerId, streakFloor);
-        Set<LocalDate> completedDays = completions.stream()
+        List<LocalDate> completedDates = completions.stream()
                 .map(inst -> inst.atZone(KST).toLocalDate())
-                .collect(Collectors.toSet());
+                .toList();
+        Set<LocalDate> completedDays = new java.util.HashSet<>(completedDates);
         long streakDays = computeStreak(completedDays, today);
+        long longestStreak = computeLongestStreak(completedDays);
+
+        LocalDate monthStart = today.withDayOfMonth(1);
+        long completedThisMonth = completedDates.stream()
+                .filter(d -> !d.isBefore(monthStart)).count();
+
+        // 지난 7일 요일별 완료 수(index 6 = 오늘).
+        long[] last7 = new long[7];
+        for (LocalDate d : completedDates) {
+            long ago = java.time.temporal.ChronoUnit.DAYS.between(d, today);
+            if (ago >= 0 && ago < 7) last7[(int) (6 - ago)]++;
+        }
+        List<Long> last7Days = java.util.Arrays.stream(last7).boxed().toList();
 
         return new ApiResponse<>(new TodoStats(
                 total, completed, total - completed, overdue, dueToday,
-                completedToday, completedThisWeek, streakDays));
+                completedToday, completedThisWeek, completedThisMonth,
+                streakDays, longestStreak, last7Days));
+    }
+
+    @Transactional(readOnly = true)
+    public TodoListResponse getCompletedHistory(int page, int limit) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        if (page < 1) fields.put("page", "page는 1 이상이어야 합니다.");
+        if (limit < 1 || limit > 100) fields.put("limit", "limit는 1 이상 100 이하여야 합니다.");
+        if (!fields.isEmpty()) throw validationError(fields);
+
+        Long ownerId = currentOwnerId();
+        PageRequest pageable = PageRequest.of(page - 1, limit);
+        Page<Todo> completed = ownerId == null
+                ? todoRepository.findCompletedOrderByCompletedAtDesc(pageable)
+                : todoRepository.findCompletedByOwnerOrderByCompletedAtDesc(ownerId, pageable);
+        return TodoListResponse.from(completed.map(TodoResponse::new), page);
     }
 
     @Transactional(readOnly = true)
@@ -676,6 +706,23 @@ public class TodoService {
             cursor = cursor.minusDays(1);
         }
         return streak;
+    }
+
+    // 기록 전체에서 가장 긴 연속 완료 구간. 순수 함수(테스트용).
+    static long computeLongestStreak(Set<LocalDate> completedDays) {
+        long best = 0;
+        for (LocalDate d : completedDays) {
+            // 각 연속 구간의 시작점(전날이 없는 날)에서만 세어 O(n)
+            if (completedDays.contains(d.minusDays(1))) continue;
+            long len = 0;
+            LocalDate cur = d;
+            while (completedDays.contains(cur)) {
+                len++;
+                cur = cur.plusDays(1);
+            }
+            if (len > best) best = len;
+        }
+        return best;
     }
 
     private static String normalizeSort(String sort) {
