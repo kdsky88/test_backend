@@ -7,5 +7,6 @@ public record TodoStats(
         long overdue,
         long dueToday,
         long completedToday,
-        long completedThisWeek
+        long completedThisWeek,
+        long streakDays
 ) {}

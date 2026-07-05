@@ -568,6 +568,16 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
             @Param("end") java.time.Instant end
     );
 
+    // 연속 완료(streak) 계산용: floor 이후의 완료 시각들. Java에서 KST 날짜로 묶어 계산.
+    @Query("SELECT t.completedAt FROM Todo t WHERE t.completed = true AND t.completedAt >= :floor")
+    java.util.List<java.time.Instant> findCompletedAtSince(@Param("floor") java.time.Instant floor);
+
+    @Query("SELECT t.completedAt FROM Todo t WHERE (t.owner.id = :ownerId OR t.assignedTo.id = :ownerId) AND t.completed = true AND t.completedAt >= :floor")
+    java.util.List<java.time.Instant> findCompletedAtSinceByOwnerId(
+            @Param("ownerId") Long ownerId,
+            @Param("floor") java.time.Instant floor
+    );
+
     java.util.Optional<Todo> findByIdAndOwnerId(String id, Long ownerId);
 
     // 소유자 또는 담당자에게 보이는 todo (담당자 완료 허용용)
