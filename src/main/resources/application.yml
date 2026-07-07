@@ -1,6 +1,7 @@
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:testdb}
+    # sslmode: 외부 관리형 DB(Neon 등)는 require. 로컬/내부는 prefer(있으면 SSL, 없으면 평문).
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:testdb}?sslmode=${DB_SSLMODE:prefer}
     driver-class-name: org.postgresql.Driver
     username: ${DB_USERNAME:testuser}
     password: ${DB_PASSWORD:testpassword}

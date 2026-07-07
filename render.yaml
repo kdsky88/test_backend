@@ -1,11 +1,6 @@
-# Render Blueprint: 무료 Postgres + Docker 웹 서비스
-# Render 대시보드 → New → Blueprint → 이 레포 선택하면 자동 생성됨.
-databases:
-  - name: test-db
-    plan: free
-    databaseName: testdb
-    user: testuser
-
+# Render Blueprint: Docker 웹 서비스 (DB는 외부 Neon 무료 Postgres 사용)
+# DB는 Render 무료 Postgres가 만료돼 Neon으로 이전함. DB_* 값은 Render 대시보드
+# 환경변수에 직접 설정(sync: false) — 비밀번호를 레포에 커밋하지 않기 위함.
 services:
   - type: web
     name: test-backend
@@ -14,26 +9,19 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     envVars:
+      # 아래 DB_*는 Render 대시보드에서 Neon 값으로 설정(레포에 값 저장 X).
       - key: DB_HOST
-        fromDatabase:
-          name: test-db
-          property: host
+        sync: false
       - key: DB_PORT
-        fromDatabase:
-          name: test-db
-          property: port
+        sync: false
       - key: DB_NAME
-        fromDatabase:
-          name: test-db
-          property: database
+        sync: false
       - key: DB_USERNAME
-        fromDatabase:
-          name: test-db
-          property: user
+        sync: false
       - key: DB_PASSWORD
-        fromDatabase:
-          name: test-db
-          property: password
+        sync: false
+      - key: DB_SSLMODE # Neon 등 외부 DB는 require
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: TODO_LEGACY_OWNER_EMAIL
