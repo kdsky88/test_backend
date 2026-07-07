@@ -18,6 +18,7 @@ public class CreateTodoRequest {
     private OffsetDateTime dueAt;
     private String assignee;
     private List<String> tags;
+    private List<SubtaskRequest> subtasks;
     private String recurrence;
     private String assignedToEmail;
 
