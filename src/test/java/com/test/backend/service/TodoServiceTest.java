@@ -291,6 +291,51 @@ class TodoServiceTest {
     }
 
     @Test
+    void createsAndReplacesSubtasks() {
+        CreateTodoRequest create = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(create, "title", "여행 준비");
+        com.test.backend.dto.request.SubtaskRequest s1 = new com.test.backend.dto.request.SubtaskRequest();
+        s1.setTitle("여권");
+        s1.setDone(true);
+        org.springframework.test.util.ReflectionTestUtils.setField(create, "subtasks", List.of(s1));
+        given(todoRepository.save(any(Todo.class))).willAnswer(inv -> inv.getArgument(0));
+
+        TodoResponse created = todoService.createTodo(create).data();
+        assertThat(created.subtasks()).hasSize(1);
+        assertThat(created.subtasks().get(0).title()).isEqualTo("여권");
+        assertThat(created.subtasks().get(0).done()).isTrue();
+
+        Todo todo = new Todo("여행 준비", null, null);
+        todo.replaceSubtasks(List.of(new com.test.backend.domain.entity.Subtask("여권", true)));
+        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
+        UpdateTodoRequest update = new UpdateTodoRequest();
+        com.test.backend.dto.request.SubtaskRequest s2 = new com.test.backend.dto.request.SubtaskRequest();
+        s2.setTitle("충전기");
+        update.setSubtasks(List.of(s2));
+
+        TodoResponse updated = todoService.updateTodo(TODO_ID, update).data();
+        assertThat(updated.subtasks()).hasSize(1);
+        assertThat(updated.subtasks().get(0).title()).isEqualTo("충전기");
+        assertThat(updated.subtasks().get(0).done()).isFalse();
+    }
+
+    @Test
+    void rejectsBlankSubtaskTitle() {
+        CreateTodoRequest create = new CreateTodoRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(create, "title", "할 일");
+        com.test.backend.dto.request.SubtaskRequest blank = new com.test.backend.dto.request.SubtaskRequest();
+        blank.setTitle("   ");
+        org.springframework.test.util.ReflectionTestUtils.setField(create, "subtasks", List.of(blank));
+
+        assertThatThrownBy(() -> todoService.createTodo(create))
+                .isInstanceOfSatisfying(TodoApiException.class, exception -> {
+                    assertThat(exception.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(exception.getFields()).containsKey("subtasks");
+                });
+    }
+
+    @Test
     void updatesOnlyNote() {
         Todo todo = new Todo("기존 제목", null, "기존 메모", null, TodoPriority.MEDIUM);
         given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));

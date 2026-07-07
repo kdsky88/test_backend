@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Getter
 @NoArgsConstructor
@@ -39,6 +40,9 @@ public class UpdateTodoRequest {
 
     private boolean assignedToEmailPresent;
     private String assignedToEmail;
+
+    private boolean subtasksPresent;
+    private List<SubtaskRequest> subtasks;
 
     @JsonSetter("title")
     public void setTitle(String title) {
@@ -100,14 +104,21 @@ public class UpdateTodoRequest {
         this.assignedToEmail = assignedToEmail;
     }
 
+    @JsonSetter("subtasks")
+    public void setSubtasks(List<SubtaskRequest> subtasks) {
+        this.subtasksPresent = true;
+        this.subtasks = subtasks;
+    }
+
     public boolean hasAnyField() {
         return titlePresent || descriptionPresent || notePresent
                 || startAtPresent || dueAtPresent
                 || completedPresent || priorityPresent || assigneePresent
-                || recurrencePresent || assignedToEmailPresent;
+                || recurrencePresent || assignedToEmailPresent || subtasksPresent;
     }
 
-    /** completed 외 다른 필드 수정이 있는지(담당자는 완료만 가능하므로 판별용). */
+    /** completed 외 다른 필드 수정이 있는지(담당자는 완료만 가능하므로 판별용).
+     *  하위 항목(subtasks)은 공유 시 담당자도 체크할 수 있어야 하므로 일부러 제외. */
     public boolean hasNonCompletedField() {
         return titlePresent || descriptionPresent || notePresent
                 || startAtPresent || dueAtPresent

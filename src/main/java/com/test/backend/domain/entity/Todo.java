@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -90,6 +91,15 @@ public class Todo {
     @BatchSize(size = 50)
     private List<String> tags = new ArrayList<>();
 
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(
+        name = "todo_subtasks",
+        joinColumns = @JoinColumn(name = "todo_id")
+    )
+    @OrderColumn(name = "position")
+    @BatchSize(size = 50)
+    private List<Subtask> subtasks = new ArrayList<>();
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -136,6 +146,18 @@ public class Todo {
 
     public void removeTag(String tag) {
         tags.remove(tag);
+    }
+
+    public List<Subtask> getSubtasks() {
+        return Collections.unmodifiableList(subtasks);
+    }
+
+    /** 하위 항목 전체 교체(부분 수정 없이 통째로 대체). */
+    public void replaceSubtasks(List<Subtask> newSubtasks) {
+        subtasks.clear();
+        if (newSubtasks != null) {
+            subtasks.addAll(newSubtasks);
+        }
     }
 
     public void updateTitle(String title) {

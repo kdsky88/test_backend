@@ -50,6 +50,24 @@ class UpdateTodoRequestTest {
     }
 
     @Test
+    void subtasksAreEditableByAssignee() throws Exception {
+        // 하위 항목만 담긴 수정 요청은 '완료 외 필드'로 취급되면 안 됨(담당자도 체크 가능해야 함).
+        UpdateTodoRequest request = objectMapper.readValue(
+                """
+                {"subtasks":[{"title":"준비물 챙기기","done":true},{"title":"우산","done":false}]}
+                """,
+                UpdateTodoRequest.class
+        );
+
+        assertThat(request.isSubtasksPresent()).isTrue();
+        assertThat(request.getSubtasks()).hasSize(2);
+        assertThat(request.getSubtasks().get(0).getTitle()).isEqualTo("준비물 챙기기");
+        assertThat(request.getSubtasks().get(0).isDone()).isTrue();
+        assertThat(request.hasAnyField()).isTrue();
+        assertThat(request.hasNonCompletedField()).isFalse();
+    }
+
+    @Test
     void rejectsDueAtWithoutTimezone() {
         assertThatThrownBy(() -> objectMapper.readValue(
                 """

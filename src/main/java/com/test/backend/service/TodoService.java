@@ -1,10 +1,12 @@
 package com.test.backend.service;
 
+import com.test.backend.domain.entity.Subtask;
 import com.test.backend.domain.entity.Todo;
 import com.test.backend.domain.entity.TodoPriority;
 import com.test.backend.domain.entity.TodoRecurrence;
 import com.test.backend.domain.entity.User;
 import com.test.backend.dto.request.CreateTodoRequest;
+import com.test.backend.dto.request.SubtaskRequest;
 import com.test.backend.dto.request.UpdateTodoRequest;
 import com.test.backend.dto.response.ApiResponse;
 import com.test.backend.dto.response.TodoListResponse;
@@ -42,6 +44,8 @@ public class TodoService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final int TAG_MAX_COUNT = 10;
     private static final int TAG_MAX_LENGTH = 20;
+    private static final int SUBTASK_MAX_COUNT = 50;
+    private static final int SUBTASK_MAX_LENGTH = 100;
 
     private final TodoRepository todoRepository;
     private final UserRepository userRepository;
@@ -219,6 +223,7 @@ public class TodoService {
         TodoPriority priority = resolveCreatePriority(request, fields);
         String assignee = resolveAssignee(request.getAssignee(), fields);
         List<String> tags = resolveTags(request.getTags(), fields);
+        validateSubtasks(request.getSubtasks(), fields);
         if (!fields.isEmpty()) {
             if (fields.containsKey("priority")) {
                 throw invalidPriority();
@@ -241,6 +246,7 @@ public class TodoService {
         if (tags != null) {
             tags.forEach(todo::addTag);
         }
+        todo.replaceSubtasks(toSubtasks(request.getSubtasks()));
         return new ApiResponse<>(new TodoResponse(todoRepository.save(todo)));
     }
 
@@ -346,6 +352,10 @@ public class TodoService {
             // 여기까지 온 건 소유자(위에서 담당자의 비-완료 변경 차단). 담당자 재배정.
             todo.assignTo(resolveAssignedTo(request.getAssignedToEmail()));
         }
+        if (request.isSubtasksPresent()) {
+            // 하위 항목은 소유자·담당자 모두 편집/체크 가능(위 권한 블록에서 제외됨).
+            todo.replaceSubtasks(toSubtasks(request.getSubtasks()));
+        }
         // saveAndFlush로 @LastModifiedDate가 DB에 반영된 값을 응답에 포함
         Todo saved = todoRepository.saveAndFlush(todo);
         // 반복 항목을 '완료'로 전환하면 다음 주기 항목을 자동 생성
@@ -370,6 +380,10 @@ public class TodoService {
         next.updateStartAt(shiftDate(source.getStartAt(), source.getRecurrence()));
         next.updateRecurrence(source.getRecurrence());
         source.getTags().forEach(next::addTag);
+        // 다음 주기 항목은 하위 체크리스트를 모두 미완료 상태로 복제.
+        next.replaceSubtasks(source.getSubtasks().stream()
+                .map(s -> new Subtask(s.getTitle(), false))
+                .toList());
         todoRepository.save(next);
     }
 
@@ -521,6 +535,9 @@ public class TodoService {
         }
         if (request.isRecurrencePresent()) {
             validateRecurrence(request.getRecurrence(), fields);
+        }
+        if (request.isSubtasksPresent()) {
+            validateSubtasks(request.getSubtasks(), fields);
         }
         if (!fields.isEmpty()) {
             if (fields.containsKey("priority")) {
@@ -680,6 +697,42 @@ public class TodoService {
             return null;
         }
         return normalized;
+    }
+
+    private void validateSubtasks(List<SubtaskRequest> subtasks, Map<String, String> fields) {
+        if (subtasks == null) {
+            return;
+        }
+        if (subtasks.size() > SUBTASK_MAX_COUNT) {
+            fields.put("subtasks", "하위 항목은 최대 " + SUBTASK_MAX_COUNT + "개까지 지정할 수 있습니다.");
+            return;
+        }
+        for (SubtaskRequest s : subtasks) {
+            String title = (s == null || s.getTitle() == null) ? null : s.getTitle().strip();
+            if (title == null || title.isBlank()) {
+                fields.put("subtasks", "하위 항목 제목은 비어 있을 수 없습니다.");
+                return;
+            }
+            if (title.length() > SUBTASK_MAX_LENGTH) {
+                fields.put("subtasks", "하위 항목 제목은 " + SUBTASK_MAX_LENGTH + "자를 초과할 수 없습니다.");
+                return;
+            }
+        }
+    }
+
+    /** 요청 하위 항목 → 엔티티 목록. 검증은 validateSubtasks에서 이미 수행(여기선 빈 항목만 방어적으로 제외). */
+    private List<Subtask> toSubtasks(List<SubtaskRequest> subtasks) {
+        if (subtasks == null) {
+            return List.of();
+        }
+        List<Subtask> result = new ArrayList<>();
+        for (SubtaskRequest s : subtasks) {
+            if (s == null || s.getTitle() == null || s.getTitle().isBlank()) {
+                continue;
+            }
+            result.add(new Subtask(s.getTitle().strip(), s.isDone()));
+        }
+        return result;
     }
 
     private static String normalizeString(String s) {
