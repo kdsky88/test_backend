@@ -27,7 +27,9 @@ public record TodoResponse(
         TodoRecurrence recurrence,
         String ownerEmail,
         String assignedToEmail,
-        String assignedToName
+        String assignedToName,
+        String tripId,
+        String tripTitle
 ) {
     // ponytail: owner/assignedTo LAZY 접근으로 목록당 N+1 발생 — 소규모라 허용,
     // 커지면 fetch join으로 최적화.
@@ -50,7 +52,9 @@ public record TodoResponse(
                 todo.getRecurrence(),
                 todo.getOwner() == null ? null : todo.getOwner().getEmail(),
                 todo.getAssignedTo() == null ? null : todo.getAssignedTo().getEmail(),
-                todo.getAssignedTo() == null ? null : todo.getAssignedTo().getName()
+                todo.getAssignedTo() == null ? null : todo.getAssignedTo().getName(),
+                todo.getTrip() == null ? null : todo.getTrip().getId(),
+                todo.getTrip() == null ? null : todo.getTrip().getTitle()
         );
     }
 }

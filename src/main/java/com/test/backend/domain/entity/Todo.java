@@ -32,7 +32,8 @@ import java.util.UUID;
 @Table(name = "todos", indexes = {
     @Index(name = "idx_todos_assignee", columnList = "assignee"),
     @Index(name = "idx_todos_owner", columnList = "owner_id"),
-    @Index(name = "idx_todos_assigned_to", columnList = "assigned_to_id")
+    @Index(name = "idx_todos_assigned_to", columnList = "assigned_to_id"),
+    @Index(name = "idx_todos_trip", columnList = "trip_id")
 })
 @Getter
 @NoArgsConstructor
@@ -51,6 +52,11 @@ public class Todo {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_to_id")
     private User assignedTo;
+
+    // 소속 여행(선택적). 소유자가 생성/수정 시 tripId로 연결.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "trip_id")
+    private Trip trip;
 
     @Column(nullable = false, length = 100)
     private String title;
@@ -198,6 +204,10 @@ public class Todo {
 
     public void assignTo(User user) {
         this.assignedTo = user;
+    }
+
+    public void assignTrip(Trip trip) {
+        this.trip = trip;
     }
 
     public void updateCompleted(boolean completed, Instant changedAt) {

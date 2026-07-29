@@ -21,6 +21,7 @@ public class CreateTodoRequest {
     private List<SubtaskRequest> subtasks;
     private String recurrence;
     private String assignedToEmail;
+    private String tripId;
 
     private boolean priorityPresent;
     private String priority;

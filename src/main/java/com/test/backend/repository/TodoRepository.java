@@ -591,6 +591,14 @@ public interface TodoRepository extends JpaRepository<Todo, String> {
     @Query("SELECT t FROM Todo t WHERE t.id = :id AND (t.owner.id = :userId OR t.assignedTo.id = :userId)")
     java.util.Optional<Todo> findByIdVisibleTo(@Param("id") String id, @Param("userId") Long userId);
 
+    // 한 여행의 일정: 일정순(시작·마감 없으면 뒤로), 없으면 생성순.
+    @Query("""
+            SELECT t FROM Todo t
+            WHERE t.trip.id = :tripId
+            ORDER BY COALESCE(t.startAt, t.dueAt) ASC NULLS LAST, t.createdAt ASC
+            """)
+    List<Todo> findByTripIdOrderBySchedule(@Param("tripId") String tripId);
+
     long countByOwnerIsNull();
 
     @Modifying

@@ -2,6 +2,7 @@ package com.test.backend.exception;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.test.backend.controller.TodoController;
+import com.test.backend.controller.TripController;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -15,7 +16,7 @@ import java.util.Map;
 
 @Slf4j
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = TodoController.class)
+@RestControllerAdvice(assignableTypes = {TodoController.class, TripController.class})
 public class TodoExceptionHandler {
 
     @ExceptionHandler(TodoApiException.class)

@@ -12,7 +12,9 @@ import com.test.backend.dto.response.ApiResponse;
 import com.test.backend.dto.response.TodoListResponse;
 import com.test.backend.dto.response.TodoResponse;
 import com.test.backend.exception.TodoApiException;
+import com.test.backend.domain.entity.Trip;
 import com.test.backend.repository.TodoRepository;
+import com.test.backend.repository.TripRepository;
 import com.test.backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -49,15 +51,21 @@ public class TodoService {
 
     private final TodoRepository todoRepository;
     private final UserRepository userRepository;
+    private final TripRepository tripRepository;
 
     public TodoService(TodoRepository todoRepository) {
-        this(todoRepository, null);
+        this(todoRepository, null, null);
+    }
+
+    public TodoService(TodoRepository todoRepository, UserRepository userRepository) {
+        this(todoRepository, userRepository, null);
     }
 
     @Autowired
-    public TodoService(TodoRepository todoRepository, UserRepository userRepository) {
+    public TodoService(TodoRepository todoRepository, UserRepository userRepository, TripRepository tripRepository) {
         this.todoRepository = todoRepository;
         this.userRepository = userRepository;
+        this.tripRepository = tripRepository;
     }
 
     @Transactional(readOnly = true)
@@ -241,6 +249,7 @@ public class TodoService {
         );
         currentUser().ifPresent(todo::assignOwner);
         todo.assignTo(resolveAssignedTo(request.getAssignedToEmail()));
+        todo.assignTrip(resolveTrip(request.getTripId()));
         todo.updateStartAt(request.getStartAt());
         todo.updateRecurrence(parseRecurrence(request.getRecurrence()));
         if (tags != null) {
@@ -352,6 +361,10 @@ public class TodoService {
             // 여기까지 온 건 소유자(위에서 담당자의 비-완료 변경 차단). 담당자 재배정.
             todo.assignTo(resolveAssignedTo(request.getAssignedToEmail()));
         }
+        if (request.isTripIdPresent()) {
+            // 소유자만 여행 연결/해제(위 권한 블록에서 담당자 차단).
+            todo.assignTrip(resolveTrip(request.getTripId()));
+        }
         if (request.isSubtasksPresent()) {
             // 하위 항목은 소유자·담당자 모두 편집/체크 가능(위 권한 블록에서 제외됨).
             todo.replaceSubtasks(toSubtasks(request.getSubtasks()));
@@ -377,6 +390,7 @@ public class TodoService {
         );
         next.assignOwner(source.getOwner());
         next.assignTo(source.getAssignedTo());
+        next.assignTrip(source.getTrip());
         next.updateStartAt(shiftDate(source.getStartAt(), source.getRecurrence()));
         next.updateRecurrence(source.getRecurrence());
         source.getTags().forEach(next::addTag);
@@ -385,6 +399,18 @@ public class TodoService {
                 .map(s -> new Subtask(s.getTitle(), false))
                 .toList());
         todoRepository.save(next);
+    }
+
+    /** tripId → Trip(소유자 것만). 빈 값이면 null(연결 해제). 없거나 남의 여행이면 검증 에러. */
+    private Trip resolveTrip(String tripId) {
+        if (tripId == null || tripId.isBlank()) return null;
+        if (tripRepository == null) return null; // 여행 저장소 없는 테스트 경로
+        Long ownerId = currentOwnerId();
+        return tripRepository.findByIdAndOwnerId(tripId.strip(), ownerId).orElseThrow(() -> {
+            Map<String, String> f = new LinkedHashMap<>();
+            f.put("tripId", "해당 여행을 찾을 수 없습니다.");
+            return validationError(f);
+        });
     }
 
     /** 담당자 이메일 → User. 빈 값이면 null(배정 해제). 없는 이메일이면 검증 에러. */

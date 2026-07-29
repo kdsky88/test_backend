@@ -44,6 +44,9 @@ public class UpdateTodoRequest {
     private boolean subtasksPresent;
     private List<SubtaskRequest> subtasks;
 
+    private boolean tripIdPresent;
+    private String tripId;
+
     @JsonSetter("title")
     public void setTitle(String title) {
         this.titlePresent = true;
@@ -110,11 +113,18 @@ public class UpdateTodoRequest {
         this.subtasks = subtasks;
     }
 
+    @JsonSetter("tripId")
+    public void setTripId(String tripId) {
+        this.tripIdPresent = true;
+        this.tripId = tripId;
+    }
+
     public boolean hasAnyField() {
         return titlePresent || descriptionPresent || notePresent
                 || startAtPresent || dueAtPresent
                 || completedPresent || priorityPresent || assigneePresent
-                || recurrencePresent || assignedToEmailPresent || subtasksPresent;
+                || recurrencePresent || assignedToEmailPresent || subtasksPresent
+                || tripIdPresent;
     }
 
     /** completed 외 다른 필드 수정이 있는지(담당자는 완료만 가능하므로 판별용).
@@ -123,6 +133,6 @@ public class UpdateTodoRequest {
         return titlePresent || descriptionPresent || notePresent
                 || startAtPresent || dueAtPresent
                 || priorityPresent || assigneePresent
-                || recurrencePresent || assignedToEmailPresent;
+                || recurrencePresent || assignedToEmailPresent || tripIdPresent;
     }
 }
