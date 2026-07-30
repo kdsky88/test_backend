@@ -58,6 +58,14 @@ public class Todo {
     @JoinColumn(name = "trip_id")
     private Trip trip;
 
+    // 장소(선택적): 위경도 + 장소명. 셋이 한 단위로 움직임.
+    private Double latitude;
+
+    private Double longitude;
+
+    @Column(length = 200)
+    private String placeName;
+
     @Column(nullable = false, length = 100)
     private String title;
 
@@ -208,6 +216,13 @@ public class Todo {
 
     public void assignTrip(Trip trip) {
         this.trip = trip;
+    }
+
+    /** 장소 전체 교체(셋 다 null이면 장소 해제). */
+    public void updateLocation(Double latitude, Double longitude, String placeName) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.placeName = placeName;
     }
 
     public void updateCompleted(boolean completed, Instant changedAt) {

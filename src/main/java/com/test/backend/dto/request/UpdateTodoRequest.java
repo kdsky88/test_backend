@@ -47,6 +47,12 @@ public class UpdateTodoRequest {
     private boolean tripIdPresent;
     private String tripId;
 
+    // 장소는 한 단위: lat/lng/placeName 중 하나라도 오면 present(셋 다 null이면 장소 해제).
+    private boolean locationPresent;
+    private Double latitude;
+    private Double longitude;
+    private String placeName;
+
     @JsonSetter("title")
     public void setTitle(String title) {
         this.titlePresent = true;
@@ -119,12 +125,30 @@ public class UpdateTodoRequest {
         this.tripId = tripId;
     }
 
+    @JsonSetter("latitude")
+    public void setLatitude(Double latitude) {
+        this.locationPresent = true;
+        this.latitude = latitude;
+    }
+
+    @JsonSetter("longitude")
+    public void setLongitude(Double longitude) {
+        this.locationPresent = true;
+        this.longitude = longitude;
+    }
+
+    @JsonSetter("placeName")
+    public void setPlaceName(String placeName) {
+        this.locationPresent = true;
+        this.placeName = placeName;
+    }
+
     public boolean hasAnyField() {
         return titlePresent || descriptionPresent || notePresent
                 || startAtPresent || dueAtPresent
                 || completedPresent || priorityPresent || assigneePresent
                 || recurrencePresent || assignedToEmailPresent || subtasksPresent
-                || tripIdPresent;
+                || tripIdPresent || locationPresent;
     }
 
     /** completed 외 다른 필드 수정이 있는지(담당자는 완료만 가능하므로 판별용).
@@ -133,6 +157,7 @@ public class UpdateTodoRequest {
         return titlePresent || descriptionPresent || notePresent
                 || startAtPresent || dueAtPresent
                 || priorityPresent || assigneePresent
-                || recurrencePresent || assignedToEmailPresent || tripIdPresent;
+                || recurrencePresent || assignedToEmailPresent || tripIdPresent
+                || locationPresent;
     }
 }

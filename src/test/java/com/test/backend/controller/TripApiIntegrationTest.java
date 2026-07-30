@@ -43,20 +43,26 @@ class TripApiIntegrationTest {
     void linksTodoToTripAndListsItByTrip() throws Exception {
         String tripId = createTrip("제주 여행", "제주");
 
-        // tripId를 지정해 일정 생성 → 응답에 tripId가 실려 나와야 함(연결 확인).
+        // tripId + 장소(위경도/장소명)를 지정해 일정 생성 → 응답에 실려 나와야 함.
         mockMvc.perform(post("/todos")
                         .contentType("application/json")
-                        .content("{\"title\":\"성산일출봉\",\"tripId\":\"" + tripId + "\"}"))
+                        .content("{\"title\":\"성산일출봉\",\"tripId\":\"" + tripId + "\","
+                                + "\"latitude\":33.4588891,\"longitude\":126.9408178,\"placeName\":\"성산일출봉\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.tripId").value(tripId));
+                .andExpect(jsonPath("$.data.tripId").value(tripId))
+                .andExpect(jsonPath("$.data.latitude").value(33.4588891))
+                .andExpect(jsonPath("$.data.placeName").value("성산일출봉"));
 
-        // 여행별 일정 조회 → 방금 만든 항목이 나와야 함(resolveTrip 쓰기 + findByTripId 읽기 실행).
+        // 여행별 일정 조회 → 방금 만든 항목이 나와야 함(위치 왕복까지 확인).
         mockMvc.perform(get("/trips/{id}/todos", tripId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].title").value("성산일출봉"))
                 .andExpect(jsonPath("$.data[0].tripId").value(tripId))
-                .andExpect(jsonPath("$.data[0].tripTitle").value("제주 여행"));
+                .andExpect(jsonPath("$.data[0].tripTitle").value("제주 여행"))
+                .andExpect(jsonPath("$.data[0].latitude").value(33.4588891))
+                .andExpect(jsonPath("$.data[0].longitude").value(126.9408178))
+                .andExpect(jsonPath("$.data[0].placeName").value("성산일출봉"));
     }
 
     @Test

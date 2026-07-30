@@ -29,7 +29,10 @@ public record TodoResponse(
         String assignedToEmail,
         String assignedToName,
         String tripId,
-        String tripTitle
+        String tripTitle,
+        Double latitude,
+        Double longitude,
+        String placeName
 ) {
     // ponytail: owner/assignedTo LAZY 접근으로 목록당 N+1 발생 — 소규모라 허용,
     // 커지면 fetch join으로 최적화.
@@ -54,7 +57,10 @@ public record TodoResponse(
                 todo.getAssignedTo() == null ? null : todo.getAssignedTo().getEmail(),
                 todo.getAssignedTo() == null ? null : todo.getAssignedTo().getName(),
                 todo.getTrip() == null ? null : todo.getTrip().getId(),
-                todo.getTrip() == null ? null : todo.getTrip().getTitle()
+                todo.getTrip() == null ? null : todo.getTrip().getTitle(),
+                todo.getLatitude(),
+                todo.getLongitude(),
+                todo.getPlaceName()
         );
     }
 }

@@ -85,6 +85,9 @@ class TodoControllerTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 null
         );
         given(todoService.createTodo(any())).willReturn(new ApiResponse<>(todo));

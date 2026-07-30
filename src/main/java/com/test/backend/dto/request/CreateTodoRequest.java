@@ -22,6 +22,9 @@ public class CreateTodoRequest {
     private String recurrence;
     private String assignedToEmail;
     private String tripId;
+    private Double latitude;
+    private Double longitude;
+    private String placeName;
 
     private boolean priorityPresent;
     private String priority;

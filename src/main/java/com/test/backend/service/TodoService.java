@@ -232,6 +232,7 @@ public class TodoService {
         String assignee = resolveAssignee(request.getAssignee(), fields);
         List<String> tags = resolveTags(request.getTags(), fields);
         validateSubtasks(request.getSubtasks(), fields);
+        validateLocation(request.getLatitude(), request.getLongitude(), request.getPlaceName(), fields);
         if (!fields.isEmpty()) {
             if (fields.containsKey("priority")) {
                 throw invalidPriority();
@@ -250,6 +251,7 @@ public class TodoService {
         currentUser().ifPresent(todo::assignOwner);
         todo.assignTo(resolveAssignedTo(request.getAssignedToEmail()));
         todo.assignTrip(resolveTrip(request.getTripId()));
+        todo.updateLocation(request.getLatitude(), request.getLongitude(), request.getPlaceName());
         todo.updateStartAt(request.getStartAt());
         todo.updateRecurrence(parseRecurrence(request.getRecurrence()));
         if (tags != null) {
@@ -365,6 +367,9 @@ public class TodoService {
             // 소유자만 여행 연결/해제(위 권한 블록에서 담당자 차단).
             todo.assignTrip(resolveTrip(request.getTripId()));
         }
+        if (request.isLocationPresent()) {
+            todo.updateLocation(request.getLatitude(), request.getLongitude(), request.getPlaceName());
+        }
         if (request.isSubtasksPresent()) {
             // 하위 항목은 소유자·담당자 모두 편집/체크 가능(위 권한 블록에서 제외됨).
             todo.replaceSubtasks(toSubtasks(request.getSubtasks()));
@@ -391,6 +396,7 @@ public class TodoService {
         next.assignOwner(source.getOwner());
         next.assignTo(source.getAssignedTo());
         next.assignTrip(source.getTrip());
+        next.updateLocation(source.getLatitude(), source.getLongitude(), source.getPlaceName());
         next.updateStartAt(shiftDate(source.getStartAt(), source.getRecurrence()));
         next.updateRecurrence(source.getRecurrence());
         source.getTags().forEach(next::addTag);
@@ -565,11 +571,30 @@ public class TodoService {
         if (request.isSubtasksPresent()) {
             validateSubtasks(request.getSubtasks(), fields);
         }
+        if (request.isLocationPresent()) {
+            validateLocation(request.getLatitude(), request.getLongitude(), request.getPlaceName(), fields);
+        }
         if (!fields.isEmpty()) {
             if (fields.containsKey("priority")) {
                 throw invalidPriority();
             }
             throw validationError(fields);
+        }
+    }
+
+    /** 장소 검증: 위경도는 함께(둘 다 있거나 둘 다 없거나) + 범위, 장소명 길이. */
+    private void validateLocation(Double lat, Double lng, String placeName, Map<String, String> fields) {
+        if ((lat == null) != (lng == null)) {
+            fields.put("location", "위도와 경도는 함께 지정해야 합니다.");
+        }
+        if (lat != null && (lat < -90 || lat > 90)) {
+            fields.put("latitude", "위도는 -90~90 사이여야 합니다.");
+        }
+        if (lng != null && (lng < -180 || lng > 180)) {
+            fields.put("longitude", "경도는 -180~180 사이여야 합니다.");
+        }
+        if (placeName != null && placeName.length() > 200) {
+            fields.put("placeName", "장소명은 200자를 초과할 수 없습니다.");
         }
     }
 
