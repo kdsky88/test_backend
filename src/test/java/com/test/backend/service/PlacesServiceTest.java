@@ -33,6 +33,28 @@ class PlacesServiceTest {
         assertThat(p.distance()).isEqualTo(157);
     }
 
+    // 핵심 버그 픽스: 첫 결과가 아니라 importance 최고를 고른다.
+    // (Nominatim "후쿠오카" → 0번=도야마 동명 역, 최고 importance=후쿠오카시)
+    @Test
+    void pickBestLatLon_choosesHighestImportance_notFirst() throws Exception {
+        String json = """
+            [
+              {"lat":"36.708","lon":"136.931","importance":0.404},
+              {"lat":"33.595","lon":"130.362","importance":0.518}
+            ]
+            """;
+        double[] ll = PlacesService.pickBestLatLon(new ObjectMapper().readTree(json));
+        assertThat(ll).isNotNull();
+        assertThat(ll[0]).isEqualTo(33.595); // 후쿠오카시
+        assertThat(ll[1]).isEqualTo(130.362);
+    }
+
+    @Test
+    void pickBestLatLon_emptyOrNull_returnsNull() throws Exception {
+        assertThat(PlacesService.pickBestLatLon(new ObjectMapper().readTree("[]"))).isNull();
+        assertThat(PlacesService.pickBestLatLon(null)).isNull();
+    }
+
     // 카테고리/거리 없는 결과도 null 안전.
     @Test
     void toPlace_handlesMissingFields() throws Exception {
