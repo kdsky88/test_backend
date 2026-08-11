@@ -22,6 +22,11 @@ spring:
 server:
   port: ${PORT:8080}
 
+# Foursquare Places (장소 추천 프록시). 키는 Render 환경변수 FSQ_API_KEY로만 주입.
+foursquare:
+  api-key: ${FSQ_API_KEY:}
+  api-version: "2025-06-17"
+
 jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hs256}
   # access 토큰 7일(604800000ms). 짧으면(1h) refresh가 잦아 조기 로그아웃 위험↑.
