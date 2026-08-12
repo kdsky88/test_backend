@@ -22,10 +22,9 @@ spring:
 server:
   port: ${PORT:8080}
 
-# Foursquare Places (장소 추천 프록시). 키는 Render 환경변수 FSQ_API_KEY로만 주입.
-foursquare:
-  api-key: ${FSQ_API_KEY:}
-  api-version: "2025-06-17"
+# Google Places API(New) (장소 검색 프록시). 키는 Render 환경변수 GOOGLE_PLACES_KEY로만 주입.
+google:
+  places-key: ${GOOGLE_PLACES_KEY:}
 
 jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hs256}
