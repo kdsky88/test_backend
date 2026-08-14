@@ -25,6 +25,8 @@ public class PlacesService {
     // Pro 필드만(별점/전화 제외) → 저렴한 티어(월 5000회 무료).
     private static final String FIELD_MASK =
             "places.id,places.displayName,places.formattedAddress,places.location,places.primaryTypeDisplayName";
+    // detail=true일 때만 추가(설명·별점 = 상위 티어). 즉흥 추천처럼 저볼륨에서만 사용.
+    private static final String DETAIL_FIELDS = ",places.editorialSummary,places.rating";
     private static final int MAX_LIMIT = 20;
 
     private final RestClient google;
@@ -34,13 +36,12 @@ public class PlacesService {
         this.configured = apiKey != null && !apiKey.isBlank();
         this.google = RestClient.builder()
                 .defaultHeader("X-Goog-Api-Key", apiKey)
-                .defaultHeader("X-Goog-FieldMask", FIELD_MASK)
                 .defaultHeader("Accept", "application/json")
                 .build();
     }
 
     // ponytail: 캐시 없음. 지역별 반복이 쿼터에 잡히면 @Cacheable(region+type) 한 줄 추가.
-    public ApiResponse<List<PlaceResponse>> recommend(String region, String type, int limit) {
+    public ApiResponse<List<PlaceResponse>> recommend(String region, String type, int limit, boolean detail) {
         if (!configured) {
             throw new TodoApiException(HttpStatus.SERVICE_UNAVAILABLE, "PLACES_NOT_CONFIGURED",
                     "장소 검색이 설정되지 않았습니다(GOOGLE_PLACES_KEY).");
@@ -55,11 +56,13 @@ public class PlacesService {
             default -> base; // 'address'/일반: 입력 그대로
         };
         int cappedLimit = Math.max(1, Math.min(limit, MAX_LIMIT));
+        String fieldMask = detail ? FIELD_MASK + DETAIL_FIELDS : FIELD_MASK;
 
         JsonNode body;
         try {
             body = google.post()
                     .uri(SEARCH_URI)
+                    .header("X-Goog-FieldMask", fieldMask)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of(
                             "textQuery", query,
@@ -91,7 +94,9 @@ public class PlacesService {
                 loc.path("latitude").asDouble(),
                 loc.path("longitude").asDouble(),
                 null, // distance: Text Search는 기준점 없음
-                null  // tel: Pro 필드 아님
+                null, // tel: Pro 필드 아님
+                p.path("editorialSummary").path("text").asText(null), // detail일 때만
+                p.hasNonNull("rating") ? p.get("rating").asDouble() : null
         );
     }
 }

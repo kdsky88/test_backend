@@ -32,7 +32,7 @@ class PlacesServiceTest {
         assertThat(p.tel()).isNull();
     }
 
-    // 카테고리/주소 없는 결과도 null 안전.
+    // 카테고리/주소 없는 결과도 null 안전. detail 필드도 없으면 null.
     @Test
     void toPlace_handlesMissingFields() throws Exception {
         String json = """
@@ -42,5 +42,23 @@ class PlacesServiceTest {
         assertThat(p.name()).isEqualTo("이름만");
         assertThat(p.category()).isNull();
         assertThat(p.address()).isNull();
+        assertThat(p.description()).isNull();
+        assertThat(p.rating()).isNull();
+    }
+
+    // detail=true 응답: editorialSummary/rating 매핑.
+    @Test
+    void toPlace_mapsDetailFields() throws Exception {
+        String json = """
+            {
+              "displayName": {"text": "감천문화마을"},
+              "location": {"latitude": 35.1, "longitude": 129.0},
+              "editorialSummary": {"text": "벽화와 카페가 있는 그림 같은 명소"},
+              "rating": 4.4
+            }
+            """;
+        PlaceResponse p = PlacesService.toPlace(new ObjectMapper().readTree(json));
+        assertThat(p.description()).contains("벽화");
+        assertThat(p.rating()).isEqualTo(4.4);
     }
 }

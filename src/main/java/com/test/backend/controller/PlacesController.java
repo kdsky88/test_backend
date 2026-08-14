@@ -24,7 +24,9 @@ public class PlacesController {
     public ResponseEntity<ApiResponse<List<PlaceResponse>>> recommend(
             @RequestParam String region,
             @RequestParam(defaultValue = "attraction") String type,
-            @RequestParam(defaultValue = "20") int limit) {
-        return ResponseEntity.ok(placesService.recommend(region, type, limit));
+            @RequestParam(defaultValue = "20") int limit,
+            // detail=true면 설명·별점 포함(상위 티어). 즉흥 추천 등 저볼륨에서만.
+            @RequestParam(defaultValue = "false") boolean detail) {
+        return ResponseEntity.ok(placesService.recommend(region, type, limit, detail));
     }
 }

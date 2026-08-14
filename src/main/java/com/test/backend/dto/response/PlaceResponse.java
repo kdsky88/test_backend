@@ -1,6 +1,6 @@
 package com.test.backend.dto.response;
 
-// Foursquare 장소 추천 결과 1건 (프론트 카드/저장용 최소 필드).
+// 장소 검색 결과 1건. description/rating은 detail=true(상위 티어)일 때만 채워짐.
 public record PlaceResponse(
         String fsqId,
         String name,
@@ -9,6 +9,8 @@ public record PlaceResponse(
         double latitude,
         double longitude,
         Integer distance,
-        String tel
+        String tel,
+        String description,
+        Double rating
 ) {
 }
