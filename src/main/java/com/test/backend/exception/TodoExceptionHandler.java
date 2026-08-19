@@ -1,6 +1,7 @@
 package com.test.backend.exception;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.test.backend.controller.ExpenseController;
 import com.test.backend.controller.PlacesController;
 import com.test.backend.controller.TodoController;
 import com.test.backend.controller.TripController;
@@ -17,7 +18,7 @@ import java.util.Map;
 
 @Slf4j
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = {TodoController.class, TripController.class, PlacesController.class})
+@RestControllerAdvice(assignableTypes = {TodoController.class, TripController.class, PlacesController.class, ExpenseController.class})
 public class TodoExceptionHandler {
 
     @ExceptionHandler(TodoApiException.class)
