@@ -29,4 +29,14 @@ public class PlacesController {
             @RequestParam(defaultValue = "false") boolean detail) {
         return ResponseEntity.ok(placesService.recommend(region, type, limit, detail));
     }
+
+    // 현재 위치 반경 검색. type=food|attraction(기본).
+    @GetMapping("/nearby")
+    public ResponseEntity<ApiResponse<List<PlaceResponse>>> nearby(
+            @RequestParam double lat,
+            @RequestParam double lng,
+            @RequestParam(defaultValue = "attraction") String type,
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(placesService.nearby(lat, lng, type, limit));
+    }
 }

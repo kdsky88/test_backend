@@ -22,6 +22,7 @@ import java.util.Map;
 public class PlacesService {
 
     private static final URI SEARCH_URI = URI.create("https://places.googleapis.com/v1/places:searchText");
+    private static final URI NEARBY_URI = URI.create("https://places.googleapis.com/v1/places:searchNearby");
     // Pro 필드만(별점/전화 제외) → 저렴한 티어(월 5000회 무료).
     private static final String FIELD_MASK =
             "places.id,places.displayName,places.formattedAddress,places.location,places.primaryTypeDisplayName";
@@ -73,6 +74,45 @@ public class PlacesService {
                     .body(JsonNode.class);
         } catch (RestClientException e) {
             throw new TodoApiException(HttpStatus.BAD_GATEWAY, "PLACES_UPSTREAM_ERROR", "장소 검색에 실패했습니다.");
+        }
+
+        List<PlaceResponse> places = new ArrayList<>();
+        if (body != null && body.has("places")) {
+            for (JsonNode p : body.get("places")) {
+                places.add(toPlace(p));
+            }
+        }
+        return new ApiResponse<>(places);
+    }
+
+    // 현재 위치(lat,lng) 반경 검색(Places Nearby). type=food|attraction.
+    public ApiResponse<List<PlaceResponse>> nearby(double lat, double lng, String type, int limit) {
+        if (!configured) {
+            throw new TodoApiException(HttpStatus.SERVICE_UNAVAILABLE, "PLACES_NOT_CONFIGURED",
+                    "장소 검색이 설정되지 않았습니다(GOOGLE_PLACES_KEY).");
+        }
+        List<String> types = "food".equalsIgnoreCase(type) ? List.of("restaurant") : List.of("tourist_attraction");
+        int cappedLimit = Math.max(1, Math.min(limit, MAX_LIMIT));
+
+        JsonNode body;
+        try {
+            body = google.post()
+                    .uri(NEARBY_URI)
+                    .header("X-Goog-FieldMask", FIELD_MASK)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of(
+                            "includedTypes", types,
+                            "maxResultCount", cappedLimit,
+                            "rankPreference", "DISTANCE",
+                            "languageCode", "ko",
+                            "locationRestriction", Map.of(
+                                    "circle", Map.of(
+                                            "center", Map.of("latitude", lat, "longitude", lng),
+                                            "radius", 3000.0))))
+                    .retrieve()
+                    .body(JsonNode.class);
+        } catch (RestClientException e) {
+            throw new TodoApiException(HttpStatus.BAD_GATEWAY, "PLACES_UPSTREAM_ERROR", "주변 검색에 실패했습니다.");
         }
 
         List<PlaceResponse> places = new ArrayList<>();
