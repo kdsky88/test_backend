@@ -41,7 +41,12 @@ public class PlacesService {
                 .build();
     }
 
-    // ponytail: 캐시 없음. 지역별 반복이 쿼터에 잡히면 @Cacheable(region+type) 한 줄 추가.
+    // 같은 지역+타입 반복 검색은 캐시 → 구글 호출·비용 절감. 지역명은 이산적이라 키 폭증 없음.
+    // ponytail: ConcurrentMap(무한·무TTL)이지만 Render 무료 티어가 자주 재시작해 사실상 단수명.
+    // 키 무한증가가 문제되면 Caffeine(maxSize+TTL)으로 교체.
+    @org.springframework.cache.annotation.Cacheable(
+            value = "placeRecommend",
+            key = "#region.strip().toLowerCase() + '|' + #type + '|' + #limit + '|' + #detail")
     public ApiResponse<List<PlaceResponse>> recommend(String region, String type, int limit, boolean detail) {
         if (!configured) {
             throw new TodoApiException(HttpStatus.SERVICE_UNAVAILABLE, "PLACES_NOT_CONFIGURED",
