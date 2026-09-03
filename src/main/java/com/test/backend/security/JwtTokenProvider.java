@@ -36,6 +36,11 @@ public class JwtTokenProvider {
         return buildToken(email, refreshTokenExpiration, "refresh");
     }
 
+    // 비밀번호 재설정용 단기 토큰(30분). 상태 저장 없이 서명으로 검증.
+    public String generateResetToken(String email) {
+        return buildToken(email, 30 * 60 * 1000L, "reset");
+    }
+
     private String buildToken(String email, long expiration, String type) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expiration);

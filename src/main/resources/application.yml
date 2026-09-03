@@ -26,6 +26,15 @@ server:
 google:
   places-key: ${GOOGLE_PLACES_KEY:}
 
+# 비밀번호 재설정 메일(SendGrid). 키/발신자는 Render 환경변수로만. 미설정 시 발송 대신 로그.
+sendgrid:
+  api-key: ${SENDGRID_API_KEY:}
+mail:
+  from: ${MAIL_FROM:}
+# 재설정 링크가 가리킬 프론트 웹 주소.
+app:
+  web-url: ${APP_WEB_URL:https://test-todo-app-f4c9a.web.app}
+
 jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hs256}
   # access 토큰 7일(604800000ms). 짧으면(1h) refresh가 잦아 조기 로그아웃 위험↑.
