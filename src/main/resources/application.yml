@@ -18,16 +18,6 @@ spring:
     baseline-version: 1
     placeholders:
       legacyOwnerEmail: ${TODO_LEGACY_OWNER_EMAIL:}
-  # 비밀번호 재설정 메일(Gmail SMTP). 계정/앱 비밀번호는 Render 환경변수로만.
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: ${GMAIL_USERNAME:}
-    password: ${GMAIL_APP_PASSWORD:}
-    default-encoding: UTF-8
-    properties:
-      mail.smtp.auth: true
-      mail.smtp.starttls.enable: true
 
 server:
   port: ${PORT:8080}
@@ -36,9 +26,12 @@ server:
 google:
   places-key: ${GOOGLE_PLACES_KEY:}
 
-# 비밀번호 재설정 메일 발신자. 미설정 시 발송 대신 로그(로컬 테스트).
+# 비밀번호 재설정 메일(Resend HTTP API). 키는 Render 환경변수 RESEND_API_KEY로만.
+# from은 도메인 인증 전이면 onboarding@resend.dev만 가능(기본값). 미설정 시 발송 대신 로그.
+resend:
+  api-key: ${RESEND_API_KEY:}
 mail:
-  from: ${MAIL_FROM:}
+  from: ${MAIL_FROM:onboarding@resend.dev}
 # 재설정 링크가 가리킬 프론트 웹 주소.
 app:
   web-url: ${APP_WEB_URL:https://test-todo-app-f4c9a.web.app}
