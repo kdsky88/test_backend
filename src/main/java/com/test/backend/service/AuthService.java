@@ -24,7 +24,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
-    private final MailSender mailSender;
+    private final EmailSender emailSender;
 
     @Value("${app.web-url:https://test-todo-app-f4c9a.web.app}")
     private String webUrl;
@@ -92,7 +92,7 @@ public class AuthService {
                     + link + "\n\n"
                     + "본인이 요청하지 않았다면 이 메일을 무시하세요.\n— P의 여행 플래너";
             try {
-                mailSender.send(user.getEmail(), "[P의 여행 플래너] 비밀번호 재설정", body);
+                emailSender.send(user.getEmail(), "[P의 여행 플래너] 비밀번호 재설정", body);
             } catch (Exception e) {
                 log.error("비밀번호 재설정 메일 발송 실패: {}", e.getMessage());
             }
