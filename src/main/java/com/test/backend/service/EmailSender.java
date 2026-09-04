@@ -45,8 +45,8 @@ public class EmailSender {
             helper.setText(body, false);
             mailSender.send(mime);
         } catch (Exception e) {
-            // 호출부(AuthService)에서 로깅하도록 런타임으로 전달.
-            throw new RuntimeException("메일 발송 실패", e);
+            // 실제 SMTP 원인을 메시지에 포함해 호출부 로그에서 보이게.
+            throw new RuntimeException("메일 발송 실패: " + e.getMessage(), e);
         }
     }
 }

@@ -94,7 +94,7 @@ public class AuthService {
             try {
                 emailSender.send(user.getEmail(), "[P의 여행 플래너] 비밀번호 재설정", body);
             } catch (Exception e) {
-                log.error("비밀번호 재설정 메일 발송 실패: {}", e.getMessage());
+                log.error("비밀번호 재설정 메일 발송 실패", e); // 전체 스택(SMTP 원인 포함)
             }
         });
     }
