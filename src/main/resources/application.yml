@@ -24,6 +24,7 @@ spring:
     port: 587
     username: ${GMAIL_USERNAME:}
     password: ${GMAIL_APP_PASSWORD:}
+    default-encoding: UTF-8
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
