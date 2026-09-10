@@ -2,7 +2,6 @@ package com.test.backend.controller;
 
 import com.test.backend.dto.response.ApiResponse;
 import com.test.backend.dto.response.PlaceResponse;
-import com.test.backend.service.CurationService;
 import com.test.backend.service.PlacesService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,15 +18,6 @@ import java.util.List;
 public class PlacesController {
 
     private final PlacesService placesService;
-    private final CurationService curationService;
-
-    // 지역+일수로 AI 코스 큐레이션(Claude). 텍스트 한 덩어리 반환.
-    @GetMapping("/curate")
-    public ResponseEntity<ApiResponse<String>> curate(
-            @RequestParam String region,
-            @RequestParam(defaultValue = "2") int days) {
-        return ResponseEntity.ok(curationService.curate(region, days));
-    }
 
     // 지역명으로 추천. type=food(맛집)|attraction(관광지, 기본).
     @GetMapping("/recommend")
