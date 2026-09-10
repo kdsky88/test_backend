@@ -26,6 +26,10 @@ server:
 google:
   places-key: ${GOOGLE_PLACES_KEY:}
 
+# AI 코스 큐레이션(Claude). 키는 Render 환경변수 ANTHROPIC_API_KEY로만. 미설정 시 503 CURATION_NOT_CONFIGURED.
+anthropic:
+  api-key: ${ANTHROPIC_API_KEY:}
+
 # 비밀번호 재설정 메일(Resend HTTP API). 키는 Render 환경변수 RESEND_API_KEY로만.
 # from은 도메인 인증 전이면 onboarding@resend.dev만 가능(기본값). 미설정 시 발송 대신 로그.
 resend:
