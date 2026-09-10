@@ -46,7 +46,7 @@ public class CurationService {
                 + "하루에 관광지 1~2곳과 맛집 1곳 정도, 즉흥적으로 즐길 수 있게. 각 날짜별로 짧게.";
         try {
             Message response = client.messages().create(MessageCreateParams.builder()
-                    .model(Model.of("claude-opus-4-8")) // 이 SDK 버전엔 4.8 상수가 없어 문자열 ID로(유효)
+                    .model(Model.CLAUDE_HAIKU_4_5) // 짧은 코스 생성엔 Haiku로 충분 + 저렴(개발 키와 분리 권장)
                     .maxTokens(2000L)
                     .system(SYSTEM)
                     .addUserMessage(prompt)
