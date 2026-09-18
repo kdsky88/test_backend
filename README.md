@@ -1,6 +1,14 @@
-# test_backend
+# P의 여행 플래너 — 백엔드 (Spring Boot)
 
-Spring Boot 3.3 + Java 17 기반의 JWT 인증 REST API 백엔드 프로젝트입니다.
+**P의 여행 플래너** 앱의 REST API 백엔드. JWT 인증, 여행/일정/경비 관리, 그리고 장소 검색·메일 발송을
+외부 API로 프록시한다. Render(Docker) + Neon Postgres에 배포.
+
+> 🤖 이 프로젝트는 **AI 코딩 에이전트(Claude Code)와 대화하며** 만든 실배포 백엔드다.
+
+- **라이브**: https://test-backend-83yt.onrender.com (헬스체크 `/api/health`)
+- **프론트 레포**: https://github.com/kdsky88/test_front
+
+---
 
 ## 기술 스택
 
@@ -9,102 +17,69 @@ Spring Boot 3.3 + Java 17 기반의 JWT 인증 REST API 백엔드 프로젝트�
 | Language | Java 17 |
 | Framework | Spring Boot 3.3 |
 | Security | Spring Security + JWT (jjwt 0.11.5) |
-| Database | H2 (Embedded, 개발용) |
-| ORM | Spring Data JPA |
-| Build | Gradle Kotlin DSL |
-| Validation | Jakarta Bean Validation |
+| DB | Neon Postgres (운영) · H2 (로컬) |
+| ORM / 마이그레이션 | Spring Data JPA · Flyway (V1~V8) |
+| 캐시 | Spring Cache (장소 추천 결과) |
+| 외부 연동 | Google Places API(New) · Resend(메일) — `RestClient` 프록시, 키는 env only |
+| Build / 배포 | Gradle Kotlin DSL · Docker · Render |
+
+**아키텍처**: Flutter 클라이언트 ↔ 이 백엔드 ↔ Neon Postgres.
+Google Places·Resend는 **백엔드가 서버 키로 프록시**(키 미노출), 지도·날씨·환율·위키백과는 클라이언트가 직접 호출.
+
+---
 
 ## 실행 방법
 
 ```bash
-# 프로젝트 빌드
-./gradlew build
-
-# 애플리케이션 실행
+# 로컬(H2) 실행 — 별도 DB 없이 뜬다
 ./gradlew bootRun
 
-# 테스트 실행
+# 빌드 / 테스트
+./gradlew bootJar -x test
 ./gradlew test
 ```
 
-서버 기본 포트: `http://localhost:8080`
+기본 포트: `http://localhost:8080`
+
+### 환경 변수 (운영)
+
+| 변수 | 설명 |
+|------|------|
+| `DB_HOST` `DB_PORT` `DB_NAME` `DB_USERNAME` `DB_PASSWORD` `DB_SSLMODE` | Postgres 접속 (미설정 시 로컬 H2) |
+| `JWT_SECRET` `JWT_ACCESS_TOKEN_EXPIRATION` `JWT_REFRESH_TOKEN_EXPIRATION` | JWT 서명·만료 |
+| `GOOGLE_PLACES_KEY` | 장소 검색(서버 전용 키). 미설정 시 `/places/*` → 503 |
+| `RESEND_API_KEY` `MAIL_FROM` | 비밀번호 재설정 메일(HTTP API). 미설정 시 발송 대신 로그 |
+| `APP_WEB_URL` | 재설정 링크가 가리킬 프론트 웹 주소 |
+| `PORT` | 서버 포트 (Render가 주입) |
+
+---
 
 ## API 엔드포인트
 
+인증 계열만 `/api` 프리픽스, 도메인 리소스(trips/todos/places)는 프리픽스 없음.
+
 | 메서드 | 경로 | 인증 | 설명 |
 |--------|------|------|------|
-| POST | /api/auth/register | 없음 | 회원가입 |
-| POST | /api/auth/login | 없음 | 로그인 |
-| POST | /api/auth/refresh | Refresh Token (Bearer) | 액세스 토큰 갱신 |
-| GET | /api/users/me | Bearer JWT | 내 정보 조회 |
-| PUT | /api/users/me | Bearer JWT | 내 정보 수정 |
-| GET | /api/health | 없음 | 헬스체크 |
-| POST | /api/posts | Bearer JWT | 게시글 생성 |
-| GET | /api/posts | Bearer JWT | 게시글 목록 조회 |
-| GET | /api/posts/{id} | Bearer JWT | 게시글 단건 조회 |
-| PUT | /api/posts/{id} | Bearer JWT | 게시글 수정 (본인만) |
-| PATCH | /api/posts/{id}/status | Bearer JWT | 상태 변경 (본인만) |
-| DELETE | /api/posts/{id} | Bearer JWT | 게시글 삭제 (본인만) |
+| POST | `/api/auth/register` · `/login` · `/refresh` | 없음 | 가입 · 로그인 · 토큰 갱신 |
+| POST | `/api/auth/password` | Bearer | 비밀번호 변경 |
+| POST | `/api/auth/forgot` · `/reset` | 없음 | 재설정 링크 메일 · 재설정 |
+| GET/PUT | `/api/users/me` | Bearer | 내 정보 조회·수정 |
+| GET | `/api/health` | 없음 | 헬스체크 |
+| GET/POST | `/trips` | Bearer | 여행 목록·생성 |
+| GET/PATCH/DELETE | `/trips/{id}` | Bearer | 여행 조회·수정·삭제 |
+| GET | `/trips/{id}/todos` | Bearer | 여행의 일정 목록 |
+| GET/POST | `/trips/{id}/expenses` | Bearer | 경비 목록·추가 |
+| DELETE | `/trips/{id}/expenses/{id}` | Bearer | 경비 삭제 |
+| GET/POST | `/todos` | Bearer | 일정 목록·생성 (`/calendar` `/stats` `/completed` `/tags` `/assignees` 포함) |
+| PATCH/DELETE | `/todos/{id}` | Bearer | 일정 수정·삭제 (+ `/{id}/tags`) |
+| GET | `/places/recommend` · `/nearby` | Bearer | 관광지·맛집 추천 · 내 주변 (Google Places 프록시) |
 
-### 예시 요청
+## DB 마이그레이션 (Flyway)
 
-**회원가입**
-```bash
-curl -X POST http://localhost:8080/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123","name":"홍길동"}'
-```
+`src/main/resources/db/migration` — `V1` 베이스라인 → `V4` posts 제거 → `V6` trips → `V7` todos 위경도/장소명 → `V8` 경비.
+`ddl-auto=validate`이므로 새 테이블은 로컬 H2 부팅으로 스키마를 먼저 검증한다.
 
-**로그인**
-```bash
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123"}'
-```
+## 배포
 
-**내 정보 조회**
-```bash
-curl -X GET http://localhost:8080/api/users/me \
-  -H "Authorization: Bearer {accessToken}"
-```
-
-**헬스체크**
-```bash
-curl http://localhost:8080/api/health
-# 응답: {"status":"UP","timestamp":"2024-01-01T00:00:00"}
-```
-
-## H2 콘솔
-
-애플리케이션 실행 후 아래 주소로 접근:
-
-- URL: `http://localhost:8080/h2-console`
-- JDBC URL: `jdbc:h2:mem:testdb`
-- Username: `sa`
-- Password: (빈칸)
-
-## 패키지 구조
-
-```
-com.test.backend
-├── config/          SecurityConfig, JwtConfig
-├── controller/      AuthController, UserController, HealthController, PostController
-├── service/         AuthService, UserService, PostService
-├── repository/      UserRepository, PostRepository
-├── domain/entity/   User, Post
-├── dto/request/     LoginRequest, RegisterRequest, UpdateUserRequest, CreatePostRequest, UpdatePostRequest, UpdatePostStatusRequest
-├── dto/response/    TokenResponse, UserResponse, PostResponse
-├── security/        JwtTokenProvider, JwtAuthenticationFilter
-└── exception/       GlobalExceptionHandler, ApiException
-```
-
-## JWT 설정
-
-`application.yml`에서 아래 항목을 환경에 맞게 수정하세요:
-
-```yaml
-jwt:
-  secret: your-secret-key-must-be-at-least-256-bits-long-for-hs256
-  access-token-expiration: 3600000    # 1시간 (ms)
-  refresh-token-expiration: 604800000 # 7일 (ms)
-```
+`git push origin main` → Render 자동 빌드·배포(Docker). Flyway가 부팅 시 실 Neon DB에 마이그레이션 적용.
+상세는 **[`DEPLOY.md`](DEPLOY.md)**.
