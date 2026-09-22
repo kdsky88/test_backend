@@ -37,6 +37,9 @@ public class User {
     @Column(length = 512)
     private String refreshToken;
 
+    @Column(nullable = false)
+    private long authVersion;
+
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;

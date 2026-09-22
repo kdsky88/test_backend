@@ -45,7 +45,7 @@ class AuthPasswordIntegrationTest {
         mockMvc.perform(post("/api/auth/password")
                         .contentType("application/json")
                         .content("{\"currentPassword\":\"password1\",\"newPassword\":\"password2\"}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

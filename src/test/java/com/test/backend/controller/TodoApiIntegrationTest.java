@@ -55,7 +55,7 @@ class TodoApiIntegrationTest {
     @WithAnonymousUser
     void rejectsUnauthenticatedTodoRequests() throws Exception {
         mockMvc.perform(get("/todos"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

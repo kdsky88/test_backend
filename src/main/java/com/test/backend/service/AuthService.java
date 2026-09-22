@@ -51,15 +51,15 @@ public class AuthService {
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findForAuthUpdateByEmail(request.getEmail())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다.");
         }
 
-        String accessToken = jwtTokenProvider.generateAccessToken(user.getEmail());
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getEmail(), user.getAuthVersion());
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail(), user.getAuthVersion());
         user.setRefreshToken(refreshToken);
         userRepository.save(user);
 
@@ -68,7 +68,7 @@ public class AuthService {
 
     @Transactional
     public void changePassword(String email, ChangePasswordRequest request) {
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findForAuthUpdateByEmail(email)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
 
         // 400: 잘못된 현재 비밀번호는 인증 실패(401)가 아니어야 함. 401이면 프론트 apiClient가
@@ -78,6 +78,8 @@ public class AuthService {
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setAuthVersion(user.getAuthVersion() + 1);
+        user.setRefreshToken(null);
         userRepository.save(user);
     }
 
@@ -85,7 +87,7 @@ public class AuthService {
     @Transactional(readOnly = true)
     public void forgotPassword(String email) {
         userRepository.findByEmail(email).ifPresent(user -> {
-            String token = jwtTokenProvider.generateResetToken(user.getEmail());
+            String token = jwtTokenProvider.generateResetToken(user.getEmail(), user.getAuthVersion());
             String link = webUrl + "/?reset=" + token;
             String body = "안녕하세요, P의 여행 플래너입니다.\n\n"
                     + "아래 링크에서 새 비밀번호를 설정하세요(30분간 유효):\n\n"
@@ -109,8 +111,12 @@ public class AuthService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "링크가 만료되었거나 유효하지 않습니다.");
         }
         String email = jwtTokenProvider.getEmail(token);
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findForAuthUpdateByEmail(email)
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "사용자를 찾을 수 없습니다."));
+        if (jwtTokenProvider.getVersion(token) != user.getAuthVersion()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "이미 사용되었거나 만료된 링크입니다.");
+        }
+        user.setAuthVersion(user.getAuthVersion() + 1);
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setRefreshToken(null); // 재설정 시 기존 세션 무효화
         userRepository.save(user);
@@ -134,17 +140,18 @@ public class AuthService {
         }
 
         String email = jwtTokenProvider.getEmail(refreshToken);
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findForAuthUpdateByEmail(email)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
 
-        if (!refreshToken.equals(user.getRefreshToken())) {
+        if (jwtTokenProvider.getVersion(refreshToken) != user.getAuthVersion()
+                || !refreshToken.equals(user.getRefreshToken())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "저장된 Refresh Token과 일치하지 않습니다.");
         }
 
         // refresh 토큰을 회전(재발급)하지 않음: 모바일 앱 종료/응답 유실로 기기와 DB의
         // refresh 토큰이 어긋나 로그인이 조기 만료되던 문제를 없앰. 새 access 토큰만 발급하고
         // 기존 refresh 토큰(로그인 시 저장, 90일)을 그대로 유지 → refresh가 멱등해짐.
-        String newAccessToken = jwtTokenProvider.generateAccessToken(email);
+        String newAccessToken = jwtTokenProvider.generateAccessToken(email, user.getAuthVersion());
         return new TokenResponse(newAccessToken, refreshToken);
     }
 }

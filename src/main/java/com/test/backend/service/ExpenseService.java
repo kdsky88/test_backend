@@ -22,6 +22,9 @@ import java.util.Map;
 @Service
 public class ExpenseService {
 
+    private static final java.math.BigDecimal MAX_AMOUNT = new java.math.BigDecimal("999999999999.99");
+    private static final java.util.Set<String> CURRENCIES = java.util.Set.of(
+            "KRW", "USD", "JPY", "EUR", "CNY", "THB", "VND", "TWD", "HKD", "SGD", "PHP", "MYR", "GBP", "AUD");
     private static final int MEMO_MAX = 200;
     private static final int CATEGORY_MAX = 20;
 
@@ -54,6 +57,9 @@ public class ExpenseService {
         Map<String, String> fields = new LinkedHashMap<>();
         if (request.getAmount() == null || request.getAmount().signum() <= 0) {
             fields.put("amount", "금액은 0보다 커야 합니다.");
+        } else if (request.getAmount().compareTo(MAX_AMOUNT) > 0
+                || request.getAmount().stripTrailingZeros().scale() > 2) {
+            fields.put("amount", "금액은 999999999999.99 이하, 소수점 둘째 자리까지 입력하세요.");
         }
         String category = request.getCategory() == null ? null : request.getCategory().strip();
         if (category == null || category.isBlank()) {
@@ -62,7 +68,7 @@ public class ExpenseService {
             fields.put("category", "분류는 " + CATEGORY_MAX + "자를 초과할 수 없습니다.");
         }
         String currency = normalizeCurrency(request.getCurrency());
-        if (currency.length() != 3) {
+        if (!CURRENCIES.contains(currency)) {
             fields.put("currency", "통화 코드가 올바르지 않습니다.");
         }
         if (request.getMemo() != null && request.getMemo().strip().length() > MEMO_MAX) {
@@ -88,7 +94,7 @@ public class ExpenseService {
 
     private static String normalizeCurrency(String raw) {
         if (raw == null || raw.isBlank()) return "KRW";
-        return raw.strip().toUpperCase();
+        return raw.strip().toUpperCase(java.util.Locale.ROOT);
     }
 
     private void requireTrip(String tripId, User user) {

@@ -38,6 +38,6 @@ app:
 
 jwt:
   secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hs256}
-  # access 토큰 7일(604800000ms). 짧으면(1h) refresh가 잦아 조기 로그아웃 위험↑.
-  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:604800000}
+  # access 토큰 15분. refresh로 갱신하며 비밀번호 변경 시 auth_version으로 즉시 폐기.
+  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:900000}
   refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000}

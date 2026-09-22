@@ -32,7 +32,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)
                 && "access".equals(jwtTokenProvider.getTokenType(token))) {
             String email = jwtTokenProvider.getEmail(token);
-            userRepository.findByEmail(email).ifPresent(user -> {
+            userRepository.findByEmail(email)
+                    .filter(user -> user.getAuthVersion() == jwtTokenProvider.getVersion(token))
+                    .ifPresent(user -> {
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
                                 email,
