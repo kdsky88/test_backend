@@ -58,7 +58,9 @@ public class PlacesService {
         String base = region.strip();
         String query = switch (type == null ? "" : type.toLowerCase()) {
             case "food" -> base + " 맛집";
-            case "attraction" -> base + " 관광명소";
+            // '관광명소'는 구글 텍스트검색이 특정 장소 한 곳으로 해석해 1건만 돌려준다
+            // (삿포로시/Sapporo/부산광역시… 전부 1건). '관광지'는 어느 도시든 목록이 나온다.
+            case "attraction" -> base + " 관광지";
             default -> base; // 'address'/일반: 입력 그대로
         };
         int cappedLimit = Math.max(1, Math.min(limit, MAX_LIMIT));
