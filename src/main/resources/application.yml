@@ -39,4 +39,5 @@ jwt:
   secret: ${JWT_SECRET}
   # access 토큰 15분. refresh로 갱신하며 비밀번호 변경 시 auth_version으로 즉시 폐기.
   access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:900000}
-  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000}
+  # refresh 90일(운영 render.yaml과 동일). 로그인 때만 재발급, refresh 호출로는 회전하지 않음.
+  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:7776000000}

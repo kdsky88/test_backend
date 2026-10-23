@@ -168,7 +168,7 @@ public class AuthService {
 
         // refresh 토큰을 회전(재발급)하지 않음: 모바일 앱 종료/응답 유실로 기기와 DB의
         // refresh 토큰이 어긋나 로그인이 조기 만료되던 문제를 없앰. 새 access 토큰만 발급하고
-        // 기존 refresh 토큰(로그인 시 저장, 운영 90일 — render.yaml)을 그대로 유지 → refresh가 멱등해짐.
+        // 기존 refresh 토큰(로그인 시 저장, 90일)을 그대로 유지 → refresh가 멱등해짐.
         String newAccessToken = jwtTokenProvider.generateAccessToken(email, user.getAuthVersion());
         return new TokenResponse(newAccessToken, refreshToken);
     }
