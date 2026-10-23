@@ -23,7 +23,12 @@ public class TodoExceptionHandler {
 
     @ExceptionHandler(TodoApiException.class)
     public ResponseEntity<TodoErrorResponse> handleTodoApiException(TodoApiException ex) {
-        log.error("TodoApiException: {}", ex.getMessage());
+        // 4xx는 클라이언트 입력 문제 → warn. 5xx(외부 API 장애·미설정 등)만 error.
+        if (ex.getStatus().is5xxServerError()) {
+            log.error("TodoApiException {} {}: {}", ex.getStatus().value(), ex.getCode(), ex.getMessage());
+        } else {
+            log.warn("TodoApiException {} {}: {}", ex.getStatus().value(), ex.getCode(), ex.getMessage());
+        }
         TodoErrorResponse response = new TodoErrorResponse(
                 new TodoError(ex.getCode(), ex.getMessage(), ex.getFields())
         );
@@ -36,7 +41,7 @@ public class TodoExceptionHandler {
                 new TodoError(
                         "VALIDATION_ERROR",
                         "요청 본문의 형식이 올바르지 않습니다.",
-                        Map.of("body", "dueAt은 타임존을 포함한 ISO 8601 형식이어야 합니다.")
+                        Map.of("body", "JSON 형식이나 값의 타입이 올바르지 않습니다(날짜는 타임존을 포함한 ISO 8601).")
                 )
         );
         return ResponseEntity.badRequest().body(response);
