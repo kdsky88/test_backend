@@ -32,7 +32,7 @@ Google Places·Resend는 **백엔드가 서버 키로 프록시**(키 미노출)
 
 ```bash
 # 로컬(H2) 실행 — 별도 DB 없이 뜬다
-./gradlew bootRun
+JWT_SECRET=local-dev-secret-key-at-least-32-bytes-long ./gradlew bootRun
 
 # 빌드 / 테스트
 ./gradlew bootJar -x test

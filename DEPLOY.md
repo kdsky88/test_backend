@@ -18,7 +18,7 @@ Docker가 실행 중이어야 PostgreSQL Testcontainers 마이그레이션 테�
 기본 `application.yml`은 **PostgreSQL**에 연결한다. Docker 없이 로컬 H2로 실행하려면 다음처럼 명시적으로 덮어쓴다.
 
 ```bash
-./gradlew bootRun --args='--spring.datasource.url=jdbc:h2:mem:runlocal;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE --spring.datasource.driver-class-name=org.h2.Driver --spring.datasource.username=sa --spring.datasource.password='
+JWT_SECRET=local-dev-secret-key-at-least-32-bytes-long ./gradlew bootRun --args='--spring.datasource.url=jdbc:h2:mem:runlocal;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE --spring.datasource.driver-class-name=org.h2.Driver --spring.datasource.username=sa --spring.datasource.password='
 ```
 
 ## 환경변수

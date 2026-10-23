@@ -3,6 +3,7 @@ package com.test.backend.service;
 import com.test.backend.domain.entity.User;
 import com.test.backend.dto.request.CreateTripRequest;
 import com.test.backend.exception.TodoApiException;
+import com.test.backend.repository.TodoRepository;
 import com.test.backend.repository.TripRepository;
 import com.test.backend.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -34,11 +35,14 @@ class TripServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private TodoRepository todoRepository;
+
     private TripService tripService;
 
     @BeforeEach
     void setUp() {
-        tripService = new TripService(tripRepository, userRepository);
+        tripService = new TripService(tripRepository, userRepository, todoRepository);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(EMAIL, "n/a", java.util.List.of()));
     }

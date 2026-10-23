@@ -9,7 +9,11 @@ import com.test.backend.dto.response.CalendarResponse;
 import com.test.backend.dto.response.TodoListResponse;
 import com.test.backend.dto.response.TodoResponse;
 import com.test.backend.exception.TodoApiException;
+import com.test.backend.domain.entity.User;
 import com.test.backend.repository.TodoRepository;
+import com.test.backend.repository.TripRepository;
+import com.test.backend.repository.UserRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +24,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -34,6 +40,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -43,27 +50,63 @@ class TodoServiceTest {
 
     private static final String TODO_ID = "550e8400-e29b-41d4-a716-446655440000";
 
+    private static final Long OWNER_ID = 1L;
+    private static final String EMAIL = "me@example.com";
+
     @Mock
     private TodoRepository todoRepository;
 
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private TripRepository tripRepository;
+
     private TodoService todoService;
+    private User me;
 
     @BeforeEach
     void setUp() {
-        todoService = new TodoService(todoRepository);
+        todoService = new TodoService(todoRepository, userRepository, tripRepository);
+        me = new User();
+        me.setId(OWNER_ID);
+        me.setEmail(EMAIL);
+        // 검증 실패로 사용자 조회 전에 끝나는 테스트도 있어 lenient.
+        lenient().when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(me));
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(EMAIL, "n/a", List.of()));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    // 내 소유 할 일로 조회되게 스텁(수정은 findByIdVisibleTo, 태그/삭제는 findByIdAndOwnerId 경로).
+    private void givenOwnTodo(Todo todo) {
+        todo.assignOwner(me);
+        lenient().when(todoRepository.findByIdAndOwnerId(TODO_ID, OWNER_ID)).thenReturn(Optional.of(todo));
+        lenient().when(todoRepository.findByIdVisibleTo(TODO_ID, OWNER_ID)).thenReturn(Optional.of(todo));
+    }
+
+    private void givenFindVisible(Page<Todo> page) {
+        given(todoRepository.findVisible(any(), any(), any(), any(), anyBoolean(), any(), any(), any())).willReturn(page);
     }
 
     @Test
     void getsActiveTodosWithOneBasedPageAndStableSort() {
         Todo todo = new Todo("할 일", null, null);
         PageRequest requestedPage = PageRequest.of(1, 30);
-        given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), anyString(), nullable(String.class), any()))
-                .willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
+        givenFindVisible(new PageImpl<>(List.of(todo), requestedPage, 1));
 
         TodoListResponse response = todoService.getTodos("active", 2, 30, null, null, "priority", false, null);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(todoRepository).findByCompletedOrderByPriority(
+        verify(todoRepository).findVisible(
+                eq(OWNER_ID),
+                eq(false),
+                isNull(),
+                isNull(),
                 eq(false),
                 anyString(),
                 nullable(String.class),
@@ -79,14 +122,13 @@ class TodoServiceTest {
 
     @Test
     void supportsAllAndCompletedStatusFilters() {
-        given(todoRepository.findAllByPriorityOrder(anyString(), nullable(String.class), any(Pageable.class))).willReturn(Page.empty());
-        given(todoRepository.findByCompletedOrderByPriority(anyBoolean(), anyString(), nullable(String.class), any())).willReturn(Page.empty());
+        givenFindVisible(Page.empty());
 
         todoService.getTodos("all", 1, 20, null, null, "priority", false, null);
         todoService.getTodos("completed", 1, 20, null, null, "priority", false, null);
 
-        verify(todoRepository).findAllByPriorityOrder(anyString(), nullable(String.class), any(Pageable.class));
-        verify(todoRepository).findByCompletedOrderByPriority(true, "PRIORITY", null, PageRequest.of(0, 20));
+        verify(todoRepository).findVisible(OWNER_ID, null, null, null, false, "PRIORITY", null, PageRequest.of(0, 20));
+        verify(todoRepository).findVisible(OWNER_ID, true, null, null, false, "PRIORITY", null, PageRequest.of(0, 20));
     }
 
     @Test
@@ -258,7 +300,7 @@ class TodoServiceTest {
     void rejectsStartAtAfterExistingDueAtOnUpdate() {
         OffsetDateTime dueAt = OffsetDateTime.parse("2026-06-10T09:00:00+09:00");
         Todo todo = new Todo("기존 제목", null, null, dueAt, TodoPriority.MEDIUM);
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
         UpdateTodoRequest request = new UpdateTodoRequest();
         request.setStartAt(OffsetDateTime.parse("2026-06-12T09:00:00+09:00"));
 
@@ -275,7 +317,7 @@ class TodoServiceTest {
     void distinguishesAbsentAndNullFieldsWhenUpdating() {
         OffsetDateTime dueAt = OffsetDateTime.parse("2026-06-10T09:00:00+09:00");
         Todo todo = new Todo("기존 제목", "기존 설명", "기존 메모", dueAt, TodoPriority.MEDIUM);
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
         given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         UpdateTodoRequest request = new UpdateTodoRequest();
         request.setDescription(null);
@@ -307,7 +349,7 @@ class TodoServiceTest {
 
         Todo todo = new Todo("여행 준비", null, null);
         todo.replaceSubtasks(List.of(new com.test.backend.domain.entity.Subtask("여권", true)));
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
         given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         UpdateTodoRequest update = new UpdateTodoRequest();
         com.test.backend.dto.request.SubtaskRequest s2 = new com.test.backend.dto.request.SubtaskRequest();
@@ -338,7 +380,7 @@ class TodoServiceTest {
     @Test
     void updatesOnlyNote() {
         Todo todo = new Todo("기존 제목", null, "기존 메모", null, TodoPriority.MEDIUM);
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
         given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         UpdateTodoRequest request = new UpdateTodoRequest();
         request.setNote("변경된 메모");
@@ -352,7 +394,7 @@ class TodoServiceTest {
     @Test
     void setsAndClearsCompletedAtWhenCompletedChanges() {
         Todo todo = new Todo("할 일", null, null);
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
         given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         UpdateTodoRequest completeRequest = new UpdateTodoRequest();
         completeRequest.setCompleted(true);
@@ -373,7 +415,7 @@ class TodoServiceTest {
     @Test
     void updatesPriorityAndKeepsItWhenOmitted() {
         Todo todo = new Todo("할 일", null, null, TodoPriority.LOW);
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
         given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
 
         UpdateTodoRequest updatePriority = new UpdateTodoRequest();
@@ -403,7 +445,7 @@ class TodoServiceTest {
     @Test
     void deletesExistingTodo() {
         Todo todo = new Todo("할 일", null, null);
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
 
         todoService.deleteTodo(TODO_ID);
 
@@ -466,50 +508,29 @@ class TodoServiceTest {
     void filtersByAssignee() {
         Todo todo = new Todo("할 일", null, null, null, TodoPriority.MEDIUM, "철수");
         PageRequest requestedPage = PageRequest.of(0, 20);
-        given(todoRepository.findByAssigneeAndCompleted(
-                isNull(),
-                eq("철수"),
-                anyString(),
-                nullable(String.class),
-                any(Pageable.class)
-        )).willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
+        givenFindVisible(new PageImpl<>(List.of(todo), requestedPage, 1));
 
         TodoListResponse response = todoService.getTodos("all", 1, 20, "철수", null, "priority", false, null);
 
-        verify(todoRepository).findByAssigneeAndCompleted(
-                isNull(),
-                eq("철수"),
-                anyString(),
-                nullable(String.class),
-                any(Pageable.class)
-        );
+        verify(todoRepository).findVisible(OWNER_ID, null, null, "철수", false, "PRIORITY", null, requestedPage);
         assertThat(response.meta().total()).isEqualTo(1);
     }
 
     @Test
     void filtersByUnassigned() {
         PageRequest requestedPage = PageRequest.of(0, 20);
-        given(todoRepository.findByUnassignedAndCompleted(
-                isNull(),
-                anyString(),
-                nullable(String.class),
-                any(Pageable.class)
-        )).willReturn(new PageImpl<>(List.of(), requestedPage, 0));
+        givenFindVisible(new PageImpl<>(List.of(), requestedPage, 0));
 
         todoService.getTodos("all", 1, 20, "@unassigned", null, "priority", false, null);
 
-        verify(todoRepository).findByUnassignedAndCompleted(
-                isNull(),
-                anyString(),
-                nullable(String.class),
-                any(Pageable.class)
-        );
+        // 예약어 '@unassigned'는 담당자 값이 아니라 unassigned 플래그로 전달.
+        verify(todoRepository).findVisible(OWNER_ID, null, null, null, true, "PRIORITY", null, requestedPage);
     }
 
     @Test
     void updatesAssignee() {
         Todo todo = new Todo("할 일", null, null, null, TodoPriority.MEDIUM, "철수");
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
         given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         UpdateTodoRequest request = new UpdateTodoRequest();
         request.setAssignee("영희");
@@ -522,7 +543,7 @@ class TodoServiceTest {
     @Test
     void clearsAssignee() {
         Todo todo = new Todo("할 일", null, null, null, TodoPriority.MEDIUM, "철수");
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
         given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         UpdateTodoRequest request = new UpdateTodoRequest();
         request.setAssignee(null);
@@ -535,7 +556,7 @@ class TodoServiceTest {
     @Test
     void keepsAssigneeWhenNotInUpdateRequest() {
         Todo todo = new Todo("할 일", null, null, null, TodoPriority.MEDIUM, "철수");
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
         given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         UpdateTodoRequest request = new UpdateTodoRequest();
         request.setTitle("제목 변경");
@@ -547,7 +568,7 @@ class TodoServiceTest {
 
     @Test
     void getsAssignees() {
-        given(todoRepository.findDistinctAssignees()).willReturn(List.of("영희", "철수"));
+        given(todoRepository.findDistinctAssigneesByOwnerId(OWNER_ID)).willReturn(List.of("영희", "철수"));
 
         ApiResponse<List<String>> response = todoService.getAssignees();
 
@@ -556,7 +577,7 @@ class TodoServiceTest {
 
     @Test
     void groupsTodosByKstDate() {
-        given(todoRepository.findByDateRangeOverlap(any(), any())).willReturn(List.of(
+        given(todoRepository.findByOwnerIdAndDateRangeOverlap(eq(OWNER_ID), any(), any())).willReturn(List.of(
             new Todo("아침", null, OffsetDateTime.parse("2026-06-15T00:00:00+09:00")),
             new Todo("저녁", null, OffsetDateTime.parse("2026-06-15T21:00:00+09:00"))
         ));
@@ -580,7 +601,7 @@ class TodoServiceTest {
     @Test
     void addsTagToTodo() {
         Todo todo = new Todo("할 일", null, null);
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
         given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
 
         ApiResponse<TodoResponse> response = todoService.addTag(TODO_ID, "업무");
@@ -592,7 +613,7 @@ class TodoServiceTest {
     void addTagIsIdempotentWhenAlreadyPresent() {
         Todo todo = new Todo("할 일", null, null);
         todo.addTag("업무");
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
 
         ApiResponse<TodoResponse> response = todoService.addTag(TODO_ID, "업무");
 
@@ -622,7 +643,6 @@ class TodoServiceTest {
 
     @Test
     void addTagReturnsNotFoundForMissingTodo() {
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> todoService.addTag(TODO_ID, "업무"))
                 .isInstanceOfSatisfying(TodoApiException.class, ex ->
@@ -635,7 +655,7 @@ class TodoServiceTest {
         for (int i = 1; i <= 10; i++) {
             todo.addTag("태그" + i);
         }
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
 
         assertThatThrownBy(() -> todoService.addTag(TODO_ID, "초과태그"))
                 .isInstanceOfSatisfying(TodoApiException.class, ex ->
@@ -646,7 +666,7 @@ class TodoServiceTest {
     void removesTagFromTodo() {
         Todo todo = new Todo("할 일", null, null);
         todo.addTag("업무");
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
         given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
 
         ApiResponse<TodoResponse> response = todoService.removeTag(TODO_ID, "업무");
@@ -657,7 +677,7 @@ class TodoServiceTest {
     @Test
     void removeTagIsIdempotentWhenNotPresent() {
         Todo todo = new Todo("할 일", null, null);
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.of(todo));
+        givenOwnTodo(todo);
         given(todoRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
 
         ApiResponse<TodoResponse> response = todoService.removeTag(TODO_ID, "없는태그");
@@ -677,7 +697,6 @@ class TodoServiceTest {
 
     @Test
     void removeTagReturnsNotFoundForMissingTodo() {
-        given(todoRepository.findById(TODO_ID)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> todoService.removeTag(TODO_ID, "업무"))
                 .isInstanceOfSatisfying(TodoApiException.class, ex ->
@@ -686,7 +705,7 @@ class TodoServiceTest {
 
     @Test
     void getTagsReturnsDistinctSortedList() {
-        given(todoRepository.findDistinctTags()).willReturn(List.of("개인", "긴급", "업무"));
+        given(todoRepository.findDistinctTagsByOwnerId(OWNER_ID)).willReturn(List.of("개인", "긴급", "업무"));
 
         ApiResponse<List<String>> response = todoService.getTags();
 
@@ -724,17 +743,11 @@ class TodoServiceTest {
         Todo todo = new Todo("할 일", null, null);
         todo.addTag("업무");
         PageRequest requestedPage = PageRequest.of(0, 20);
-        given(todoRepository.findByTagAndCompleted(
-                eq("업무"),
-                isNull(),
-                anyString(),
-                nullable(String.class),
-                any(Pageable.class)
-        )).willReturn(new PageImpl<>(List.of(todo), requestedPage, 1));
+        givenFindVisible(new PageImpl<>(List.of(todo), requestedPage, 1));
 
         TodoListResponse response = todoService.getTodos("all", 1, 20, null, "업무", "priority", false, null);
 
-        verify(todoRepository).findByTagAndCompleted(eq("업무"), isNull(), anyString(), nullable(String.class), any(Pageable.class));
+        verify(todoRepository).findVisible(OWNER_ID, null, "업무", null, false, "PRIORITY", null, requestedPage);
         assertThat(response.meta().total()).isEqualTo(1);
         assertThat(response.data().get(0).tags()).containsExactly("업무");
     }
@@ -742,16 +755,10 @@ class TodoServiceTest {
     @Test
     void filtersTodosByTagAndStatus() {
         PageRequest requestedPage = PageRequest.of(0, 20);
-        given(todoRepository.findByTagAndCompleted(
-                eq("긴급"),
-                eq(false),
-                anyString(),
-                nullable(String.class),
-                any(Pageable.class)
-        )).willReturn(new PageImpl<>(List.of(), requestedPage, 0));
+        givenFindVisible(new PageImpl<>(List.of(), requestedPage, 0));
 
         todoService.getTodos("active", 1, 20, null, "긴급", "priority", false, null);
 
-        verify(todoRepository).findByTagAndCompleted(eq("긴급"), eq(false), anyString(), nullable(String.class), any(Pageable.class));
+        verify(todoRepository).findVisible(OWNER_ID, false, "긴급", null, false, "PRIORITY", null, requestedPage);
     }
 }

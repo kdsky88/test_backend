@@ -16,7 +16,6 @@ import com.test.backend.domain.entity.Trip;
 import com.test.backend.repository.TodoRepository;
 import com.test.backend.repository.TripRepository;
 import com.test.backend.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -53,15 +52,6 @@ public class TodoService {
     private final UserRepository userRepository;
     private final TripRepository tripRepository;
 
-    public TodoService(TodoRepository todoRepository) {
-        this(todoRepository, null, null);
-    }
-
-    public TodoService(TodoRepository todoRepository, UserRepository userRepository) {
-        this(todoRepository, userRepository, null);
-    }
-
-    @Autowired
     public TodoService(TodoRepository todoRepository, UserRepository userRepository, TripRepository tripRepository) {
         this.todoRepository = todoRepository;
         this.userRepository = userRepository;
@@ -87,40 +77,9 @@ public class TodoService {
             completed = false; // '전체' + 완료 숨기기 → 미완료만
         }
 
-        Page<Todo> todoPage;
-        if (normalizedTag != null) {
-            if (normalizedAssignee == null) {
-                todoPage = ownerId == null
-                        ? todoRepository.findByTagAndCompleted(normalizedTag, completed, sortToken, searchTerm, pageable)
-                        : todoRepository.findByOwnerIdAndTagAndCompleted(ownerId, normalizedTag, completed, sortToken, searchTerm, pageable);
-            } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
-                todoPage = ownerId == null
-                        ? todoRepository.findByTagAndUnassignedAndCompleted(normalizedTag, completed, sortToken, searchTerm, pageable)
-                        : todoRepository.findByOwnerIdAndTagAndUnassignedAndCompleted(ownerId, normalizedTag, completed, sortToken, searchTerm, pageable);
-            } else {
-                todoPage = ownerId == null
-                        ? todoRepository.findByTagAndAssigneeAndCompleted(normalizedTag, completed, normalizedAssignee, sortToken, searchTerm, pageable)
-                        : todoRepository.findByOwnerIdAndTagAndAssigneeAndCompleted(ownerId, normalizedTag, completed, normalizedAssignee, sortToken, searchTerm, pageable);
-            }
-        } else {
-            if (normalizedAssignee == null) {
-                todoPage = (completed == null)
-                        ? (ownerId == null
-                                ? todoRepository.findAllByPriorityOrder(sortToken, searchTerm, pageable)
-                                : todoRepository.findAllByOwnerIdOrder(ownerId, sortToken, searchTerm, pageable))
-                        : (ownerId == null
-                                ? todoRepository.findByCompletedOrderByPriority(completed, sortToken, searchTerm, pageable)
-                                : todoRepository.findByOwnerIdAndCompletedOrder(ownerId, completed, sortToken, searchTerm, pageable));
-            } else if (UNASSIGNED_TOKEN.equals(normalizedAssignee)) {
-                todoPage = ownerId == null
-                        ? todoRepository.findByUnassignedAndCompleted(completed, sortToken, searchTerm, pageable)
-                        : todoRepository.findByOwnerIdAndUnassignedAndCompleted(ownerId, completed, sortToken, searchTerm, pageable);
-            } else {
-                todoPage = ownerId == null
-                        ? todoRepository.findByAssigneeAndCompleted(completed, normalizedAssignee, sortToken, searchTerm, pageable)
-                        : todoRepository.findByOwnerIdAndAssigneeAndCompleted(ownerId, completed, normalizedAssignee, sortToken, searchTerm, pageable);
-            }
-        }
+        boolean unassigned = UNASSIGNED_TOKEN.equals(normalizedAssignee);
+        Page<Todo> todoPage = todoRepository.findVisible(ownerId, completed, normalizedTag,
+                unassigned ? null : normalizedAssignee, unassigned, sortToken, searchTerm, pageable);
 
         Page<TodoResponse> todos = todoPage.map(TodoResponse::new);
         return TodoListResponse.from(todos, page);
@@ -134,16 +93,10 @@ public class TodoService {
         OffsetDateTime endOfToday = today.plusDays(1).atStartOfDay(KST).toOffsetDateTime();
 
         Long ownerId = currentOwnerId();
-        long total = ownerId == null ? todoRepository.count() : todoRepository.countByOwnerId(ownerId);
-        long completed = ownerId == null
-                ? todoRepository.countByCompleted(true)
-                : todoRepository.countByOwnerIdAndCompleted(ownerId, true);
-        long overdue = ownerId == null
-                ? todoRepository.countOverdue(now)
-                : todoRepository.countOverdueByOwnerId(ownerId, now);
-        long dueToday = ownerId == null
-                ? todoRepository.countDueBetween(startOfToday, endOfToday)
-                : todoRepository.countDueBetweenByOwnerId(ownerId, startOfToday, endOfToday);
+        long total = todoRepository.countByOwnerId(ownerId);
+        long completed = todoRepository.countByOwnerIdAndCompleted(ownerId, true);
+        long overdue = todoRepository.countOverdueByOwnerId(ownerId, now);
+        long dueToday = todoRepository.countDueBetweenByOwnerId(ownerId, startOfToday, endOfToday);
 
         // 완료 시각(completedAt, Instant) 기준 오늘/이번 주 완료 수. 주 시작은 달력과 맞춰 일요일.
         java.time.Instant startOfTodayI = today.atStartOfDay(KST).toInstant();
@@ -151,19 +104,13 @@ public class TodoService {
         java.time.Instant startOfWeekI = today
                 .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.SUNDAY))
                 .atStartOfDay(KST).toInstant();
-        long completedToday = ownerId == null
-                ? todoRepository.countCompletedBetween(startOfTodayI, endOfTodayI)
-                : todoRepository.countCompletedBetweenByOwnerId(ownerId, startOfTodayI, endOfTodayI);
-        long completedThisWeek = ownerId == null
-                ? todoRepository.countCompletedBetween(startOfWeekI, endOfTodayI)
-                : todoRepository.countCompletedBetweenByOwnerId(ownerId, startOfWeekI, endOfTodayI);
+        long completedToday = todoRepository.countCompletedBetweenByOwnerId(ownerId, startOfTodayI, endOfTodayI);
+        long completedThisWeek = todoRepository.countCompletedBetweenByOwnerId(ownerId, startOfWeekI, endOfTodayI);
 
         // 최근 400일 완료 시각을 한 번 가져와 streak/최장연속/이번달/주간추이를 모두 계산(추가 쿼리 없음).
         // ponytail: 400일 창이라 그 이상 연속/추이는 잘림 — 개인용엔 충분.
         Instant streakFloor = today.minusDays(400).atStartOfDay(KST).toInstant();
-        List<Instant> completions = ownerId == null
-                ? todoRepository.findCompletedAtSince(streakFloor)
-                : todoRepository.findCompletedAtSinceByOwnerId(ownerId, streakFloor);
+        List<Instant> completions = todoRepository.findCompletedAtSinceByOwnerId(ownerId, streakFloor);
         List<LocalDate> completedDates = completions.stream()
                 .map(inst -> inst.atZone(KST).toLocalDate())
                 .toList();
@@ -198,26 +145,18 @@ public class TodoService {
 
         Long ownerId = currentOwnerId();
         PageRequest pageable = PageRequest.of(page - 1, limit);
-        Page<Todo> completed = ownerId == null
-                ? todoRepository.findCompletedOrderByCompletedAtDesc(pageable)
-                : todoRepository.findCompletedByOwnerOrderByCompletedAtDesc(ownerId, pageable);
+        Page<Todo> completed = todoRepository.findCompletedByOwnerOrderByCompletedAtDesc(ownerId, pageable);
         return TodoListResponse.from(completed.map(TodoResponse::new), page);
     }
 
     @Transactional(readOnly = true)
     public ApiResponse<List<String>> getAssignees() {
-        Long ownerId = currentOwnerId();
-        return new ApiResponse<>(ownerId == null
-                ? todoRepository.findDistinctAssignees()
-                : todoRepository.findDistinctAssigneesByOwnerId(ownerId));
+        return new ApiResponse<>(todoRepository.findDistinctAssigneesByOwnerId(currentOwnerId()));
     }
 
     @Transactional(readOnly = true)
     public ApiResponse<List<String>> getTags() {
-        Long ownerId = currentOwnerId();
-        return new ApiResponse<>(ownerId == null
-                ? todoRepository.findDistinctTags()
-                : todoRepository.findDistinctTagsByOwnerId(ownerId));
+        return new ApiResponse<>(todoRepository.findDistinctTagsByOwnerId(currentOwnerId()));
     }
 
     @Transactional
@@ -248,7 +187,7 @@ public class TodoService {
                 priority,
                 assignee
         );
-        currentUser().ifPresent(todo::assignOwner);
+        todo.assignOwner(currentUser());
         todo.assignTo(resolveAssignedTo(request.getAssignedToEmail()));
         todo.assignTrip(resolveTrip(request.getTripId()));
         todo.updateLocation(request.getLatitude(), request.getLongitude(), request.getPlaceName());
@@ -306,11 +245,9 @@ public class TodoService {
     public ApiResponse<TodoResponse> updateTodo(String id, UpdateTodoRequest request) {
         validateUpdateRequest(request);
         // 소유자 또는 담당자만 접근. 담당자는 '완료'만 변경 가능.
-        Long userId = currentUser().map(User::getId).orElse(null);
-        Todo todo = (userId == null)
-                ? todoRepository.findById(id).orElseThrow(this::todoNotFound)
-                : todoRepository.findByIdVisibleTo(id, userId).orElseThrow(this::todoNotFound);
-        boolean isOwner = userId == null || todo.getOwner().getId().equals(userId);
+        Long userId = currentOwnerId();
+        Todo todo = todoRepository.findByIdVisibleTo(id, userId).orElseThrow(this::todoNotFound);
+        boolean isOwner = todo.getOwner().getId().equals(userId);
         if (!isOwner && request.hasNonCompletedField()) {
             throw new TodoApiException(
                     HttpStatus.FORBIDDEN, "FORBIDDEN", "담당자는 완료 상태만 변경할 수 있습니다.");
@@ -410,7 +347,6 @@ public class TodoService {
     /** tripId → Trip(소유자 것만). 빈 값이면 null(연결 해제). 없거나 남의 여행이면 검증 에러. */
     private Trip resolveTrip(String tripId) {
         if (tripId == null || tripId.isBlank()) return null;
-        if (tripRepository == null) return null; // 여행 저장소 없는 테스트 경로
         Long ownerId = currentOwnerId();
         return tripRepository.findByIdAndOwnerId(tripId.strip(), ownerId).orElseThrow(() -> {
             Map<String, String> f = new LinkedHashMap<>();
@@ -422,7 +358,6 @@ public class TodoService {
     /** 담당자 이메일 → User. 빈 값이면 null(배정 해제). 없는 이메일이면 검증 에러. */
     private User resolveAssignedTo(String email) {
         if (email == null || email.isBlank()) return null;
-        if (userRepository == null) return null; // 유저 저장소 없는 테스트 경로
         return userRepository.findByEmail(email.strip()).orElseThrow(() -> {
             Map<String, String> f = new LinkedHashMap<>();
             f.put("assignedToEmail", "해당 이메일의 사용자가 없습니다.");
@@ -468,9 +403,7 @@ public class TodoService {
         // 시작일~마감일 사이의 모든 날짜에 배치(월 범위로 클램프). 한쪽만 있으면 그 하루만.
         Map<String, List<TodoResponse>> grouped = new LinkedHashMap<>();
         Long ownerId = currentOwnerId();
-        List<Todo> todos = ownerId == null
-                ? todoRepository.findByDateRangeOverlap(start, end)
-                : todoRepository.findByOwnerIdAndDateRangeOverlap(ownerId, start, end);
+        List<Todo> todos = todoRepository.findByOwnerIdAndDateRangeOverlap(ownerId, start, end);
         for (Todo todo : todos) {
             OffsetDateTime rangeStart = todo.getStartAt() != null ? todo.getStartAt() : todo.getDueAt();
             OffsetDateTime rangeEnd = todo.getDueAt() != null ? todo.getDueAt() : todo.getStartAt();
@@ -487,32 +420,20 @@ public class TodoService {
     }
 
     private Todo findTodo(String id) {
-        Long ownerId = currentOwnerId();
-        return (ownerId == null
-                ? todoRepository.findById(id)
-                : todoRepository.findByIdAndOwnerId(id, ownerId))
-                .orElseThrow(() -> new TodoApiException(
-                        HttpStatus.NOT_FOUND,
-                        "TODO_NOT_FOUND",
-                        "Todo를 찾을 수 없습니다."
-                ));
+        return todoRepository.findByIdAndOwnerId(id, currentOwnerId()).orElseThrow(this::todoNotFound);
     }
 
     private Long currentOwnerId() {
-        return currentUser().map(User::getId).orElse(null);
+        return currentUser().getId();
     }
 
-    private java.util.Optional<User> currentUser() {
-        if (userRepository == null) {
-            return java.util.Optional.empty();
-        }
+    private User currentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()
                 || "anonymousUser".equals(authentication.getPrincipal())) {
             throw unauthenticated();
         }
-        return java.util.Optional.of(userRepository.findByEmail(authentication.getName())
-                .orElseThrow(this::unauthenticated));
+        return userRepository.findByEmail(authentication.getName()).orElseThrow(this::unauthenticated);
     }
 
     private TodoApiException unauthenticated() {

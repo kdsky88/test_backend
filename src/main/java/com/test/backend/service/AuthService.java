@@ -7,6 +7,7 @@ import com.test.backend.dto.request.RegisterRequest;
 import com.test.backend.dto.response.TokenResponse;
 import com.test.backend.exception.ApiException;
 import com.test.backend.repository.UserRepository;
+import com.test.backend.security.AuthThrottle;
 import com.test.backend.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,15 +17,23 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
+    // 로그인: 이메일당 15분에 실패 5회까지. 재설정 메일: 이메일당 5분에 1통(Resend 쿼터·메일 폭탄 방지).
+    private static final int LOGIN_MAX_FAILURES = 5;
+    private static final Duration LOGIN_WINDOW = Duration.ofMinutes(15);
+    private static final Duration FORGOT_WINDOW = Duration.ofMinutes(5);
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final EmailSender emailSender;
+    private final AuthThrottle throttle;
 
     @Value("${app.web-url:https://test-todo-app-f4c9a.web.app}")
     private String webUrl;
@@ -51,12 +60,16 @@ public class AuthService {
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
-        User user = userRepository.findForAuthUpdateByEmail(request.getEmail())
-                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."));
-
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+        String key = "login:" + request.getEmail();
+        if (throttle.isBlocked(key, LOGIN_MAX_FAILURES, LOGIN_WINDOW)) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "로그인 시도가 너무 많습니다. 15분 후 다시 시도해 주세요.");
+        }
+        User user = userRepository.findForAuthUpdateByEmail(request.getEmail()).orElse(null);
+        if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throttle.record(key, LOGIN_WINDOW);
             throw new ApiException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다.");
         }
+        throttle.reset(key);
 
         String accessToken = jwtTokenProvider.generateAccessToken(user.getEmail(), user.getAuthVersion());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail(), user.getAuthVersion());
@@ -86,6 +99,11 @@ public class AuthService {
     // 비밀번호 재설정 요청: 사용자가 있으면 재설정 링크 메일 발송. 이메일 존재 여부는 노출하지 않음(항상 조용히 반환).
     @Transactional(readOnly = true)
     public void forgotPassword(String email) {
+        String key = "forgot:" + email;
+        if (throttle.isBlocked(key, 1, FORGOT_WINDOW)) {
+            return; // 조용히 무시 — 응답으로 제한 여부(=요청 이력)를 드러내지 않음
+        }
+        throttle.record(key, FORGOT_WINDOW);
         userRepository.findByEmail(email).ifPresent(user -> {
             String token = jwtTokenProvider.generateResetToken(user.getEmail(), user.getAuthVersion());
             String link = webUrl + "/?reset=" + token;
@@ -150,7 +168,7 @@ public class AuthService {
 
         // refresh 토큰을 회전(재발급)하지 않음: 모바일 앱 종료/응답 유실로 기기와 DB의
         // refresh 토큰이 어긋나 로그인이 조기 만료되던 문제를 없앰. 새 access 토큰만 발급하고
-        // 기존 refresh 토큰(로그인 시 저장, 90일)을 그대로 유지 → refresh가 멱등해짐.
+        // 기존 refresh 토큰(로그인 시 저장, 운영 90일 — render.yaml)을 그대로 유지 → refresh가 멱등해짐.
         String newAccessToken = jwtTokenProvider.generateAccessToken(email, user.getAuthVersion());
         return new TokenResponse(newAccessToken, refreshToken);
     }

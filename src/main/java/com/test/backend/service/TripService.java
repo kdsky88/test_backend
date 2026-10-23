@@ -32,11 +32,6 @@ public class TripService {
     private final UserRepository userRepository;
     private final TodoRepository todoRepository;
 
-    public TripService(TripRepository tripRepository, UserRepository userRepository) {
-        this(tripRepository, userRepository, null);
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired
     public TripService(TripRepository tripRepository, UserRepository userRepository, TodoRepository todoRepository) {
         this.tripRepository = tripRepository;
         this.userRepository = userRepository;

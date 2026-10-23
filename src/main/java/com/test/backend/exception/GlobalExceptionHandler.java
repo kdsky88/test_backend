@@ -3,6 +3,7 @@ package com.test.backend.exception;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -46,8 +47,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(response);
     }
 
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException ex) {
+        return ResponseEntity.badRequest().body(new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(), "Bad Request", "요청 본문의 형식이 올바르지 않습니다.", LocalDateTime.now()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
+        // 없는 경로(404)·미지원 메서드(405)·필수 파라미터 누락(400) 등 Spring 표준 예외는
+        // 자기 상태코드를 들고 있음 → 500으로 뭉개지 않고 그대로 돌려준다.
+        if (ex instanceof org.springframework.web.ErrorResponse er) {
+            HttpStatus status = HttpStatus.valueOf(er.getStatusCode().value());
+            log.warn("{}: {}", status.value(), ex.getMessage());
+            return ResponseEntity.status(status).body(new ErrorResponse(
+                    status.value(), status.getReasonPhrase(), er.getBody().getDetail(), LocalDateTime.now()));
+        }
         log.error("Unhandled exception: ", ex);
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),

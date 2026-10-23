@@ -8,10 +8,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
+    show-sql: false
   flyway:
     enabled: true
     baseline-on-migrate: true
@@ -37,7 +34,9 @@ app:
   web-url: ${APP_WEB_URL:https://test-todo-app-f4c9a.web.app}
 
 jwt:
-  secret: ${JWT_SECRET:your-secret-key-must-be-at-least-256-bits-long-for-hs256}
+  # 기본값 없음: 키가 빠지면 공개 문자열로 서명(=토큰 위조 가능)하는 대신 기동 실패시킨다.
+  # 로컬은 JWT_SECRET=아무_32바이트_이상_문자열 ./gradlew bootRun
+  secret: ${JWT_SECRET}
   # access 토큰 15분. refresh로 갱신하며 비밀번호 변경 시 auth_version으로 즉시 폐기.
   access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:900000}
   refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000}
